@@ -10,7 +10,7 @@ NVCCFLAGS = -O3 -use_fast_math
 TARGET = train_mnist
 
 # Core Library Files (Everything EXCEPT files containing a main() function)
-CORE_C_SOURCES = src/autograd.c src/ops.c src/ops_cpu.c src/autograd_cpu.c src/nn.c src/optim_cpu.c src/dataset.c
+CORE_C_SOURCES = src/autograd.c src/ops.c src/nn.c src/dataset.c
 CORE_CU_SOURCES = src/ops_gpu.cu src/autograd_gpu.cu src/optim_gpu.cu src/tensor.cu src/optim.cu
 
 # Object files for the core library

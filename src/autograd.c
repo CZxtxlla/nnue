@@ -18,7 +18,8 @@ void backward_add(Tensor* t) {
     Tensor* b = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_add(t, a, b);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_add(t, a, b);
     }
@@ -36,7 +37,8 @@ void backward_mul(Tensor* t) {
     Tensor* b = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_mul(t, a, b);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_mul(t, a, b);
     }
@@ -54,7 +56,8 @@ void backward_add_bias(Tensor* t) {
     Tensor* bias = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_add_bias(t, a, bias);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_add_bias(t, a, bias);
     }
@@ -72,7 +75,8 @@ void backward_matmul(Tensor* t) {
     Tensor* b = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_matmul(t, a, b);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_matmul(t, a, b);
     }
@@ -89,56 +93,10 @@ void backward_relu(Tensor* t) {
     Tensor* a = t->parents[0];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_relu(t, a);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_relu(t, a);
-    }
-}
-
-void backward_flatten(Tensor* t) {
-    if (t->op != OP_FLATTEN || t->num_parents != 1) {
-        fprintf(stderr, "Error: backward_flatten called on tensor that is not the result of a flatten operation.\n");
-        return;
-    }
-
-    Tensor* a = t->parents[0];
-
-    if (t->device == DEVICE_CPU) {
-        backward_cpu_flatten(t, a);
-    } else if (t->device == DEVICE_GPU) {
-        backward_gpu_flatten(t, a);
-    }
-}
-
-void backward_conv2d(Tensor* t) {
-    if (t->op != OP_CONV2D || t->num_parents != 3) {
-        fprintf(stderr, "Error: backward_conv2d called on tensor that is not the result of a conv operation.\n");
-        return;
-    }
-
-    Tensor* input = t->parents[0];
-    Tensor* weight = t->parents[1];
-    Tensor* bias = t->parents[2];
-
-    if (t->device == DEVICE_CPU) {
-        backward_cpu_conv2d(t, input, weight, bias);
-    } else if (t->device == DEVICE_GPU) {
-        backward_gpu_conv2d(t, input, weight, bias);
-    }
-}
-
-void backward_maxpool2d(Tensor* t) {
-    if (t->op != OP_MAXPOOL2D || t->num_parents != 1) {
-        fprintf(stderr, "Error: backward_maxpool2d called on tensor that is not the result of maxpool operation.\n");
-        return;
-    }
-    
-    Tensor* input = t->parents[0];
-    
-    if (t->device == DEVICE_CPU) {
-        backward_cpu_maxpool2d(t, input);
-    } else {
-        backward_gpu_maxpool2d(t, input);
     }
 }
 
@@ -152,7 +110,8 @@ void backward_mse(Tensor* t) {
     Tensor* target = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_mse(t, pred, target);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else {
         backward_gpu_mse(t, pred, target);
     }
@@ -168,7 +127,8 @@ void backward_cross_entropy(Tensor* t) {
     Tensor* target = t->parents[1];
 
     if (t->device == DEVICE_CPU) {
-        backward_cpu_cross_entropy(t, pred, target);
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
     } else {
         backward_gpu_cross_entropy(t, pred, target);
     }
@@ -294,12 +254,6 @@ void backward(Tensor* t) {
             backward_add_bias(current);
         } else if (current->op == OP_RELU) {
             backward_relu(current);
-        } else if (current->op == OP_FLATTEN) {
-            backward_flatten(current);
-        } else if (current->op == OP_CONV2D) {
-            backward_conv2d(current);
-        } else if (current->op == OP_MAXPOOL2D) {
-            backward_maxpool2d(current);
         } else if (current->op == OP_MSE) {
             backward_mse(current);
         } else if (current->op == OP_CROSS_ENTROPY) {

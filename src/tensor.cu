@@ -2,9 +2,6 @@
 #include <cuda_runtime.h>
 #include "../include/cuda_utils.h"
 
-
-
-
 Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_grad) {
     // Allocate and initialize one tensor given the input parameters
 

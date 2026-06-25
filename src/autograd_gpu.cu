@@ -41,8 +41,6 @@ __global__ void accumulate_kernel(float* target, float* source, int size) {
 }
 
 
-
-
 // ------------- Main Kernels ----------------
 
 
@@ -97,80 +95,6 @@ __global__ void backward_relu_kernel(float* t_grad, float* a_grad, float* a_data
         if (a_grad != NULL) {
             float grad = a_data[i] > 0.0f ? t_grad[i] : 0.0f;
             atomicAdd(&a_grad[i], grad);
-        }
-    }
-}
-
-void backward_gpu_flatten(Tensor* t, Tensor* a) {
-    if (!a->requires_grad) {
-        return;
-    }
-
-    int threads = 256;
-    dim3 dimBlock(threads, 1, 1);
-    dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
-
-    accumulate_kernel<<<dimGrid, dimBlock>>>(a->gpu_grad, t->gpu_grad, a->size);
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
-
-    return;
-
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-__global__ void backward_conv2d_kernel(float* t_grad, float* input, float* weight, float* in_grad, 
-    float* weight_grad, float* bias_grad, int batch_size, int in_c, int in_h, int in_w, int out_c, 
-    int f_h, int f_w, int out_h, int out_w, int stride, int padding, int total_elements) {
-    
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // boundary check
-    if (i < total_elements) {
-        // unravel the 1d index into the 4d coors
-        int ow = i % out_w;
-        int oh = (i / out_w) % out_h;
-        int oc = (i / (out_w * out_h)) % out_c;
-        int b = i / (out_w * out_h * out_c);
-
-        float grad_out = t_grad[i];
-
-        if (bias_grad != NULL) {
-            atomicAdd(&bias_grad[oc], grad_out);
-        }
-
-        // same as the cpu, just without the four outer loops (since those are done by the parallelism)
-        for (int ic = 0; ic < in_c; ic++) {
-            for (int fh = 0; fh < f_h; fh++) {
-                for (int fw = 0; fw < f_w; fw++) {
-                    int ih = oh * stride - padding + fh;
-                    int iw = ow * stride - padding + fw;
-
-                    if (ih >= 0 && ih < in_h && iw >= 0 && iw < in_w) {
-                        // equivalent to [b, ic, ih, iw]
-                        int in_idx = b * (in_c * in_h * in_w) + ic * (in_h * in_w) + ih * in_w + iw;
-                        // equivalent to [oc, ic, fh, fw]
-                        int w_idx = oc * (in_c * f_h * f_w) + ic * (f_h * f_w) + fh * f_w + fw;
-
-                        if (in_grad != NULL) {
-                            atomicAdd(&in_grad[in_idx], weight[w_idx] * grad_out);
-                        }
-                        if (weight_grad != NULL) {
-                            atomicAdd(&weight_grad[w_idx], input[in_idx] * grad_out);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-__global__ void backward_maxpool2d_kernel(float* t_grad, int* max_indices, float* input_grad, int size) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
-        int max_idx = max_indices[i];
-        if (max_idx >= 0) {
-            atomicAdd(&input_grad[max_idx], t_grad[i]);
         }
     }
 }
@@ -333,60 +257,6 @@ void backward_gpu_relu(Tensor* t, Tensor* a) {
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
 
-    return;
-
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-void backward_gpu_conv2d(Tensor* t, Tensor* input, Tensor* weight, Tensor* bias) {
-
-    // standard parameters
-    int batch_size = input->shape[0];
-    int in_c = input->shape[1];
-    int in_h = input->shape[2];
-    int in_w = input->shape[3];
-
-    int out_c = weight->shape[0];
-    int f_h = weight->shape[2];
-    int f_w = weight->shape[3];
-
-    int out_h = t->shape[2];
-    int out_w = t->shape[3];
-
-    int total_elements = t->size;
-
-    // used to check if grad is required
-    float* in_grad = input->requires_grad ? input->gpu_grad : NULL;
-    float* w_grad = weight->requires_grad ? weight->gpu_grad : NULL;
-    float* b_grad = bias->requires_grad ? bias->gpu_grad : NULL;
-
-    int threads = 256;
-    dim3 dimBlock(threads, 1, 1);
-    dim3 dimGrid((t->size + threads - 1) / threads, 1, 1);
-
-    backward_conv2d_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, input->gpu_data, 
-        weight->gpu_data, in_grad, w_grad, b_grad, batch_size, in_c, in_h, in_w, 
-        out_c, f_h, f_w, out_h, out_w, t->stride, t->padding, total_elements);
-
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
-    return;
-
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-void backward_gpu_maxpool2d(Tensor* t, Tensor* input) {
-    if (!input ->requires_grad) {
-        return;
-    }
-    int threads = 256;
-    dim3 dimBlock(threads, 1, 1);
-    dim3 dimGrid((t->size + threads - 1) / threads, 1, 1);
-
-    backward_maxpool2d_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, t->gpu_max_indices, input->gpu_grad, t->size);
-
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     return;
 
 cleanup:

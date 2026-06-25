@@ -22,7 +22,8 @@ void sgd_step(SGD* optim) {
     for (int i = 0; i < optim->num_parameters; i++) {
         Tensor* param = optim->parameters[i];
         if (param->requires_grad && param->device == DEVICE_CPU) {
-            sgd_cpu_step(param, optim->lr);
+            fprintf(stderr, "Error: training parameters must be on the gpu.\n");
+            return;
         } else if (param->requires_grad && param->device == DEVICE_GPU) {
             sgd_gpu_step(param, optim->lr);
         }
@@ -38,7 +39,8 @@ void sgd_zero_grad(SGD* optim) {
         Tensor* param = optim->parameters[i];
 
         if (param->requires_grad && param->device == DEVICE_CPU) {
-            sgd_cpu_zero_grad(param);
+            fprintf(stderr, "Error: training parameters must be on the gpu.\n");
+            return;
         } else if (param->requires_grad && param->device == DEVICE_GPU) {
             sgd_gpu_zero_grad(param);
         }
@@ -104,7 +106,8 @@ void adam_step(Adam* optim) {
     for (int i = 0; i < optim->num_parameters; i++) {
         Tensor* param = optim->parameters[i];
         if (param->requires_grad && param->device == DEVICE_CPU) {
-            adam_cpu_step(param, optim->m[i], optim->v[i], optim->lr, optim->beta_1, optim->beta_2, optim->epsilon, optim->t);
+            fprintf(stderr, "Error: training parameters must be on the gpu.\n");
+            return;
         } else if (param->requires_grad && param->device == DEVICE_GPU) {
             adam_gpu_step(param, optim->m[i], optim->v[i], optim->lr, optim->beta_1, optim->beta_2, optim->epsilon, optim->t);
         }
@@ -120,7 +123,8 @@ void adam_zero_grad(Adam* optim) {
         Tensor* param = optim->parameters[i];
 
         if (param->requires_grad && param->device == DEVICE_CPU) {
-            adam_cpu_zero_grad(param);
+            fprintf(stderr, "Error: training parameters must be on the gpu.\n");
+            return;
         } else if (param->requires_grad && param->device == DEVICE_GPU) {
             adam_gpu_zero_grad(param);
         }

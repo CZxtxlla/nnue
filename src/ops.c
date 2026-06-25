@@ -33,7 +33,8 @@ Tensor* tensor_add(Tensor* a, Tensor* b) {
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
-        add_cpu_forward(a, b, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (a->device == DEVICE_GPU) {
         add_gpu_forward(a, b, out);
     }
@@ -78,7 +79,8 @@ Tensor* tensor_mul(Tensor* a, Tensor* b) {
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
-        mul_cpu_forward(a, b, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (a->device == DEVICE_GPU) {
         mul_gpu_forward(a, b, out);
     }
@@ -122,7 +124,8 @@ Tensor* tensor_add_bias(Tensor* a, Tensor * bias) {
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
-        bias_cpu_forward(a, bias, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (a->device == DEVICE_GPU) {
         bias_gpu_forward(a, bias, out);
     }
@@ -162,7 +165,8 @@ Tensor* tensor_matmul(Tensor* a, Tensor* b) {
     Tensor* out = create_tensor(out_shape, 2, a->device, a->requires_grad || b->requires_grad);
 
     if (a->device == DEVICE_CPU) {
-        matmul_cpu_forward(a, b, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (a->device == DEVICE_GPU) {
         matmul_gpu_forward(a, b, out);
     }
@@ -188,7 +192,8 @@ Tensor* tensor_relu(Tensor* a) {
     Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad);
 
     if (a->device == DEVICE_CPU) {
-        relu_cpu_forward(a, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (a->device == DEVICE_GPU) {
         relu_gpu_forward(a, out);
     }
@@ -209,102 +214,6 @@ Tensor* tensor_relu(Tensor* a) {
     return out;
 }
 
-Tensor* tensor_conv2d(Tensor* input, Tensor* weight, Tensor* bias, int stride, int padding) {
-    int batch_size = input->shape[0];
-    // int in_channels = input->shape[1];
-    int in_height = input->shape[2];
-    int in_width = input->shape[3];
-
-    int out_channels = weight->shape[0];
-    int filter_size = weight->shape[2]; // square filter
-
-    int out_height = ((in_height + 2 * padding - filter_size) / stride) + 1;
-    int out_width = ((in_width + 2 * padding - filter_size) / stride) + 1;
-
-    int out_shape[] = {batch_size, out_channels, out_height, out_width};
-
-    Tensor* out = create_tensor(out_shape, 4, input->device, true);
-    if (out == NULL) {
-        fprintf(stderr, "Error: problem allocating out tensor in convolution forward.\n");
-        return NULL;
-    }
-    out->op = OP_CONV2D;
-
-    out->stride = stride;
-    out->padding = padding;
-
-    out->num_parents = 3; // 3 parents: input, weight, bias
-    out->parents = (Tensor**)malloc(3 * sizeof(Tensor));
-    if (out->parents == NULL) {
-        fprintf(stderr, "Error: problem allocating parents array in convolution forward.\n");
-        return NULL;
-    }
-
-    out->parents[0] = input;
-    out->parents[1] = weight;
-    out->parents[2] = bias;
-
-    if (input->device == DEVICE_CPU) {
-        conv2d_cpu_forward(input, weight, bias, out, stride, padding);
-    } else if (input->device == DEVICE_GPU) {
-        conv2d_gpu_forward(input, weight, bias, out, stride, padding);
-    }
-
-    return out;
-}
-
-Tensor* maxpool2d_forward(Tensor* input, int filter_size, int stride, int padding) {
-    int batch_size = input->shape[0];
-    int channels = input->shape[1];
-    int in_height = input->shape[2];
-    int in_width = input->shape[3];
-
-    int out_height = ((in_height + 2 * padding - filter_size) / stride) + 1;
-    int out_width = ((in_width + 2 * padding - filter_size) / stride) + 1;
-
-    int out_shape[] = {batch_size, channels, out_height, out_width};
-
-    Tensor* out = create_tensor(out_shape, 4, input->device, true);
-    if (out == NULL) {
-        fprintf(stderr, "Error: problem allocating out tensor in max pool forward.\n");
-        return NULL;
-    }
-    out->op = OP_MAXPOOL2D;
-
-    // every max comes from 1 max input
-    if (input->device == DEVICE_CPU) {
-        out->max_indices = (int*)malloc(out->size * sizeof(int));
-        if (out->max_indices == NULL) {
-            fprintf(stderr, "Error: problem allocating max_indices array in max pool forward.\n");
-            free_tensor(out);
-            return NULL;
-        }
-    } else if (input->device == DEVICE_GPU) {
-        cudaError_t err = cudaMallocManaged((void**)&out->gpu_max_indices, out->size * sizeof(int));
-        if (err != cudaSuccess) {
-            fprintf(stderr, "Error: problem allocating gpu_max_indices array in max pool forward.\n");
-            free_tensor(out);
-            return NULL;
-        }
-    }
-
-    out->num_parents = 1;
-    out->parents = (Tensor**)malloc(1 * sizeof(Tensor));
-    if (out->parents == NULL) {
-        fprintf(stderr, "Error: problem allocating parents array in max pool forward.\n");
-        return NULL;
-    }
-
-    out->parents[0] = input;
-    if (input->device == DEVICE_CPU) {
-        maxpool2d_cpu_forward(input, out, filter_size, stride, padding);
-    } else {
-        maxpool2d_gpu_forward(input, out, filter_size, stride, padding);
-    }
-
-    return out;
-}
-
 Tensor* tensor_mse(Tensor* pred, Tensor* target) {
     int shape[] = {1};
     Tensor* out = create_tensor(shape, 1, pred->device, true);
@@ -315,7 +224,8 @@ Tensor* tensor_mse(Tensor* pred, Tensor* target) {
     out->parents[1] = target;
 
     if (pred->device == DEVICE_CPU) {
-        mse_cpu_forward(pred, target, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (pred->device == DEVICE_GPU) {
         mse_gpu_forward(pred, target, out);
     }
@@ -332,7 +242,8 @@ Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target) {
     out->parents[1] = target;
 
     if (pred->device == DEVICE_CPU) {
-        cross_entropy_cpu_forward(pred, target, out);
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
     } else if (pred->device == DEVICE_GPU) {
         cross_entropy_gpu_forward(pred, target, out);
     }
