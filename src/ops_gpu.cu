@@ -94,6 +94,31 @@ __global__ void cross_entropy_forward_kernel(float* pred, float* target, float* 
     }
 }
 
+__global__ void forward_sparse_linear_kernel(const int* d_inputs, const float* d_weights, const float* d_bias, float* d_out, int batch_size, int active_count, int hidden_dim) {
+    int h = blockIdx.x * blockDim.x + threadIdx.x; // hidden neuron
+    int b = blockIdx.y * blockDim.y + threadIdx.y; // batch
+
+    if (b >= batch_size || h >= hidden_dim) return;
+
+    float acc = d_bias[h];
+
+    int batch_offset = b * active_count; // active count is the columns, get to the first element of the batch
+
+    // loop through active features
+    for (int a = 0; a < active_count; a++) {
+
+        int feature_idx = d_inputs[batch_offset + a]; // index in the big boy matrix
+        
+        if (feature_idx < 0) continue; // -1 means there's no piece here
+
+        // get the specific weight at col h and row feature_idx (dot product with input which is 1)
+        acc += d_weights[feature_idx * hidden_dim + h];
+    }
+
+    // write to dense output tensor
+    d_out[b * hidden_dim + h] = acc;
+}
+
 
 // ------------- Helpers --------------- 
 
@@ -217,4 +242,28 @@ void cross_entropy_gpu_forward(Tensor* pred, Tensor* target, Tensor* out) {
 cleanup:
     exit(EXIT_FAILURE);
 
+}
+
+void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Tensor* out) {
+    if (!inputs->is_int_tensor || weights->is_int_tensor || bias->is_int_tensor) {
+        fprintf(stderr, "Error: invalid tensor types.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    int batch_size = inputs->shape[0];
+    int active_count = inputs->shape[1]; // 32 chess pieces
+    int hidden_dim = weights->shape[1]; // 512
+
+    int tx = 32; // 32 along hidden dim, 8 along batch_size
+    int ty = 8;
+    dim3 dimBlock(tx, ty);
+    dim3 dimGrid((hidden_dim + tx - 1) / tx, (batch_size + ty - 1) / ty);
+
+    forward_sparse_linear_kernel<<<dimGrid, dimBlock>>>(inputs->device_int_data, weights->gpu_data, bias->gpu_data, out->gpu_data, batch_size, active_count, hidden_dim);
+
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+
+    return;
+cleanup:
+    exit(EXIT_FAILURE);
 }

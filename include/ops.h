@@ -29,6 +29,9 @@ void mse_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);
 Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target);
 void cross_entropy_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);
 
+Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bias);
+void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Tensor* out);
+
 #ifdef __cplusplus
 }
 #endif

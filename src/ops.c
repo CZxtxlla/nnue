@@ -249,3 +249,32 @@ Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target) {
     }
     return out;
 }
+
+Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bias) {
+    if (!inputs->is_int_tensor || weights->is_int_tensor || bias->is_int_tensor) {
+        fprintf(stderr, "Error: invalid tensor types.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    int batch_size = inputs->shape[0];
+    int active_count = inputs->shape[1]; // 32 chess pieces
+    int hidden_dim = weights->shape[1]; // 512
+
+    int out_shape[] = {batch_size, hidden_dim};
+    Tensor* out = create_tensor(out_shape, 2, DEVICE_GPU, weights->requires_grad || bias->requires_grad, 0);
+
+    out->op = OP_SPARSE_LINEAR;
+    out->num_parents = 3;
+    out->parents = (Tensor**)malloc(3 * sizeof(Tensor*));
+    out->parents[0] = inputs;
+    out->parents[1] = weights;
+    out->parents[2] = bias;
+
+    if (inputs->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
+    } else if (inputs->device == DEVICE_GPU) {
+        sparse_linear_gpu_forward(inputs, weights, bias, out);
+    }
+    return out;
+}
