@@ -7,6 +7,10 @@
 #include "../include/optim.h"
 #include "../include/dataset.h"
 
+//forward declarations
+void init_framework();
+void cleanup_framework();
+
 // --- Helper to find the index of the highest probability ---
 static int argmax(const float* values, int row_index, int columns) {
     int best_index = 0;
@@ -87,7 +91,7 @@ MLP* run_simple_training(DeviceType device, const char* label, Tensor* images, T
 
     int num_params;
     Tensor** params = mlp_get_parameters(model, &num_params);
-    SGD* optimizer = sgd_create(params, num_params, 0.05f);
+    Adam* optimizer = adam_create(params, num_params, 0.001f);
 
     printf("\n[%s] Starting training on %d samples...\n", label, sample_count);
 
@@ -107,8 +111,8 @@ MLP* run_simple_training(DeviceType device, const char* label, Tensor* images, T
 
             seed_loss_grad(loss);
             backward(loss);
-            sgd_step(optimizer);
-            sgd_zero_grad(optimizer);
+            adam_step(optimizer);
+            adam_zero_grad(optimizer);
 
             free_graph(loss);
         }
@@ -116,7 +120,7 @@ MLP* run_simple_training(DeviceType device, const char* label, Tensor* images, T
         printf("[%s] Epoch %d/%d | Average Loss: %.4f\n", label, epoch + 1, epochs, total_loss / num_batches);
     }
 
-    sgd_free(optimizer);
+    adam_free(optimizer);
     free(params); // Frees the array of pointers, not the tensors themselves
     
     return model; // Return the trained model
@@ -143,6 +147,8 @@ int main(void) {
     tensor_to_device(train_labels, DEVICE_GPU);
     tensor_to_device(test_images, DEVICE_GPU);
     tensor_to_device(test_labels, DEVICE_GPU);
+
+    init_framework();
 
     // Train the model
     MLP* trained_model = run_simple_training(DEVICE_GPU, "GPU", train_images, train_labels);
@@ -183,6 +189,7 @@ int main(void) {
     free_tensor(train_labels);
     free_tensor(test_images);
     free_tensor(test_labels);
+    cleanup_framework();
 
     printf("Demo completed successfully!\n");
     return 0;

@@ -1,35 +1,14 @@
 #include "../include/autograd.h"
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include "../include/cuda_utils.h"
+#include "../include/context.cuh"
+
 
 #define TILE_WIDTH 16
 
-__global__ void matmul_kernel(float* M, float* N, float* P, int j, int k, int l, unsigned int Mds_sz);
-
 
 // ------------- Helper Kernels ----------------
-
-
-__global__ void transpose_kernel(float* in, float* out, int width, int height) {
-    // helper for backwards matmul, transposes matrix using tiling
-    __shared__ float tile[TILE_WIDTH][TILE_WIDTH + 1];
-
-    int in_col = blockIdx.x * blockDim.x + threadIdx.x;
-    int in_row = blockIdx.y * blockDim.y + threadIdx.y;
-
-    // load data into shared memory
-    if (in_col < width && in_row < height) {
-        tile[threadIdx.y][threadIdx.x] = in[in_row * width + in_col];
-    }
-    __syncthreads();
-
-    int out_col = blockIdx.y * blockDim.y + threadIdx.x;
-    int out_row = blockIdx.x * blockDim.x + threadIdx.y;
-
-    if (out_col < height && out_row < width) {
-        out[out_row * height + out_col] = tile[threadIdx.x][threadIdx.y];
-    }
-}
 
 
 __global__ void accumulate_kernel(float* target, float* source, int size) {
@@ -190,57 +169,18 @@ void backward_gpu_matmul(Tensor* t, Tensor* a, Tensor* b) {
     int k = a->shape[1];
     int l = b->shape[1];
 
-    unsigned int Mds_sz = TILE_WIDTH * TILE_WIDTH * sizeof(float);
-    size_t shared_mem_size = Mds_sz * 2;
+    const float alpha = 1.0f;
+    const float beta = 1.0f; // accumulate
 
     if (a->requires_grad) {
 
-        float *B_T, *gradA_temp;
-        CUDA_CHECK_GOTO(cudaMalloc((void**)&B_T, k * l * sizeof(float)), cleanup);
-        CUDA_CHECK_GOTO(cudaMalloc((void**)&gradA_temp, j * k * sizeof(float)), cleanup);
-
-        // transpose B
-        dim3 dimGridB((l + TILE_WIDTH - 1)/TILE_WIDTH, (k + TILE_WIDTH - 1)/TILE_WIDTH, 1);
-        dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
-        transpose_kernel<<<dimGridB, dimBlock>>>(b->gpu_data, B_T, l, k);
-
-
-        // perform matmul
-        dim3 dimGridMatmulA((k + TILE_WIDTH - 1)/TILE_WIDTH, (j + TILE_WIDTH - 1)/TILE_WIDTH, 1);
-        matmul_kernel<<<dimGridMatmulA, dimBlock, shared_mem_size>>>(t->gpu_grad, B_T, gradA_temp, j, l, k, Mds_sz);
-
-        // accumulate into the gradient
-        int threads = 256;
-        dim3 dimGridAccA((a->size + threads - 1)/ threads, 1, 1);
-        accumulate_kernel<<<dimGridAccA, threads>>>(a->gpu_grad, gradA_temp, a->size);
-        
-        cudaFree(B_T);
-        cudaFree(gradA_temp);
+        cublasStatus_t status = cublasSgemm(global_cublas_handle, CUBLAS_OP_T, CUBLAS_OP_N, k, j, l, &alpha, b->gpu_data, l, t->gpu_grad, l, &beta, a->gpu_grad, k);
+        if (status != CUBLAS_STATUS_SUCCESS) goto cleanup;
     }
     if (b->requires_grad) {
-        float *A_T, *gradB_temp;
-        CUDA_CHECK_GOTO(cudaMalloc((void**)&A_T, j * k * sizeof(float)), cleanup);
-        CUDA_CHECK_GOTO(cudaMalloc((void**)&gradB_temp, k * l * sizeof(float)), cleanup);
-
-        // transpose B
-        dim3 dimGridA((k + TILE_WIDTH - 1)/TILE_WIDTH, (j + TILE_WIDTH - 1)/TILE_WIDTH, 1);
-        dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
-        transpose_kernel<<<dimGridA, dimBlock>>>(a->gpu_data, A_T, k, j);
-
-
-        // perform matmul
-        dim3 dimGridMatmulB((l + TILE_WIDTH - 1)/TILE_WIDTH, (k + TILE_WIDTH - 1)/TILE_WIDTH, 1);
-        matmul_kernel<<<dimGridMatmulB, dimBlock, shared_mem_size>>>(A_T, t->gpu_grad, gradB_temp, k, j, l, Mds_sz);
-
-        // accumulate into the gradient
-        int threads = 256;
-        dim3 dimGridAccB((b->size + threads - 1)/ threads, 1, 1);
-        accumulate_kernel<<<dimGridAccB, threads>>>(b->gpu_grad, gradB_temp, b->size);
-        
-        cudaFree(A_T);
-        cudaFree(gradB_temp);
+        cublasStatus_t status = cublasSgemm(global_cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, l, k, j, &alpha, t->gpu_grad, l, a->gpu_data, k, &beta, b->gpu_grad, l);
+        if (status != CUBLAS_STATUS_SUCCESS) goto cleanup;
     }
-
     return;
 
 cleanup: 

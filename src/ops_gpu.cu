@@ -1,7 +1,21 @@
 #include <cuda_runtime.h>
+#include <cublas_v2.h> // for the cublasSgemm
 #include "../include/ops.h"
 #include "../include/cuda_utils.h"
+#include "../include/context.cuh"
 #include <cmath>
+
+// define global handle
+cublasHandle_t global_cublas_handle;
+
+
+extern "C" void init_framework() {
+    cublasCreate(&global_cublas_handle);
+}
+
+extern "C" void cleanup_framework() {
+    cublasDestroy(global_cublas_handle);
+}
 
 #define TILE_WIDTH 16
 
@@ -28,49 +42,6 @@ __global__ void bias_kernel(float* a, float* bias, float* out, int width, int he
     if (col < width && row < height) {
         int index = row * width + col;
         out[index] = a[index] + bias[col];
-    }
-}
-
-__global__ void matmul_kernel(float* M, float* N, float* P, int j, int k, int l, unsigned int Mds_sz) {
-
-    //allocate space for tiles in shared memory
-    extern __shared__ char Mds_Nds[];
-    float* Mds = (float*) Mds_Nds;
-    float* Nds = (float*) (Mds_Nds + Mds_sz); // Mds_sz is in bytes
-
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    // row and column of the P value we are computing (TILE_WIDTH is also the block width, i.e. blockDim.x)
-    int row = by * TILE_WIDTH + ty;
-    int col = bx * TILE_WIDTH + tx;
-
-    // Loop over tiles required to compute this P element, ph is the phase index
-    float Pvalue = 0;
-    for (int ph = 0; ph < (k + TILE_WIDTH - 1) /TILE_WIDTH; ++ph) {
-        // load this specific tile (each thread in the block loads their respective element)
-        if ((row < j) && (ph * TILE_WIDTH + tx) < k) {
-            Mds[ty * TILE_WIDTH + tx] = M[row * k + ph * TILE_WIDTH + tx];
-        } else{
-            Mds[ty * TILE_WIDTH + tx] = 0.0f;
-        }
-        if ((ph * TILE_WIDTH + ty) < k && col < l) {
-            Nds[ty * TILE_WIDTH + tx] = N[(ph * TILE_WIDTH + ty) * l + col];
-        } else {
-            Nds[ty * TILE_WIDTH + tx] = 0.0f;
-        }
-        __syncthreads(); // wait until every thread in the block has loaded its own element of the tiled matrix
-
-        for (int i = 0; i < TILE_WIDTH; ++i) {
-            Pvalue += Mds[ty * TILE_WIDTH + i] * Nds[i * TILE_WIDTH + tx]; // perform the dot product
-        }
-        __syncthreads(); // wait until all dot products are done before loading the next tile
-    }
-    if (row < j && col < l) {
-        P[row * l + col] = Pvalue;
     }
 }
 
@@ -176,20 +147,22 @@ cleanup:
 void matmul_gpu_forward(Tensor* a, Tensor* b, Tensor* out) {
     // helper to call the matmul gpu kernel
 
-    int j = a->shape[0];
-    int k = a->shape[1];
-    int l = b->shape[1];
+    int m = a->shape[0]; // rows of a
+    int k = a->shape[1]; // cols of A / rows of B
+    int n = b->shape[1]; // cols of B
 
+    // C = alpha * (A * B) + beta * C
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
 
-    unsigned int Mds_sz = TILE_WIDTH * TILE_WIDTH * sizeof(float);
-    unsigned int Nds_sz = TILE_WIDTH * TILE_WIDTH * sizeof(float);
+    // perform B * A (this is a trick because cublas performs column major matrix multi and the matrices are stored in row major)
+    cublasStatus_t status = cublasSgemm(global_cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, b->gpu_data, n, a->gpu_data, k, &beta, out->gpu_data, n);
 
-    size_t size = Mds_sz + Nds_sz;
-
-    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
-    dim3 dimGrid((l + TILE_WIDTH - 1)/TILE_WIDTH, (j + TILE_WIDTH -1)/TILE_WIDTH, 1);
-    matmul_kernel<<<dimGrid, dimBlock, size>>>(a->gpu_data, b->gpu_data, out->gpu_data, j, k, l, Mds_sz);
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        // You can integrate this with your custom CUDA_CHECK_GOTO macro
+        printf("cuBLAS SGEMM failed\n");
+        goto cleanup;
+    }
 
     return;
 
