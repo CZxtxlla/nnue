@@ -20,12 +20,10 @@ typedef enum {
     OP_MUL,
     OP_MATMUL,
     OP_RELU,
-    OP_FLATTEN,
     OP_ADDBIAS,
-    OP_CONV2D,
-    OP_MAXPOOL2D,
     OP_MSE,
-    OP_CROSS_ENTROPY
+    OP_CROSS_ENTROPY,
+    OP_SPARSE_LINEAR
 } opType;
 
 typedef struct Tensor {
@@ -36,6 +34,9 @@ typedef struct Tensor {
     // GPU memory pointers 
     float* gpu_data;
     float* gpu_grad;
+
+    int* device_int_data; // allocation for integer feature indices
+    int is_int_tensor; // 1 if int tensor, 0 if float
 
     DeviceType device; // either DEVICE_CPU or DEVICE_GPU
 
@@ -62,8 +63,11 @@ typedef struct Tensor {
 } Tensor;
 
 
-Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_grad);
+Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_grad, int is_int_tensor);
 void free_tensor(Tensor* t);
+
+// helper to upload integer indices from host to the gpu
+void tensor_upload_int_data(Tensor* t, const int* host_src);
 
 void tensor_to_device(Tensor* t, DeviceType device); // sends tensor to be stored on specified device
 

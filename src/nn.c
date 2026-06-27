@@ -27,14 +27,14 @@ LinearLayer* create_linear_layer(int in_features, int out_features, DeviceType d
     int weight_shape[] = {in_features, out_features};
     int bias_shape[] = {1, out_features};
 
-    layer->weight = create_tensor(weight_shape, 2, DEVICE_CPU, true);
+    layer->weight = create_tensor(weight_shape, 2, DEVICE_CPU, true, 0);
     if (layer->weight == NULL) {
         fprintf(stderr, "Error: problem creating weight tensor for linear layer.\n");
         free(layer);
         return NULL;
     }
 
-    layer->bias = create_tensor(bias_shape, 2, DEVICE_CPU, true);
+    layer->bias = create_tensor(bias_shape, 2, DEVICE_CPU, true, 0);
     if (layer->bias == NULL) {
         fprintf(stderr, "Error: problem creating bias tensor for linear layer.\n");
         free(layer);

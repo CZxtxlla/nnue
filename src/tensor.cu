@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include "../include/cuda_utils.h"
 
-Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_grad) {
+Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_grad, int is_int_tensor) {
     // Allocate and initialize one tensor given the input parameters
 
     Tensor* t = (Tensor*) calloc(1, sizeof(Tensor)); // creates memory for 1 tensor device, all intialized to 0
@@ -15,12 +15,13 @@ Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_gr
     t->is_view = false;
     t->visited_pass_id = 0;
     t->ndims = ndims;
-    t->requires_grad = requires_grad;
     t->op = OP_NONE;
     t->parents = NULL;
     t->num_parents = 0;
     t->max_indices = NULL;
     t->gpu_max_indices = NULL;
+    t->is_int_tensor = is_int_tensor;
+    t->device = device;
 
     t->size = 1; // initialize to accumulate dimensions via multipication
     t->shape = (int*)malloc(ndims * sizeof(int));
@@ -34,7 +35,11 @@ Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_gr
         t->size *= shape[i];
     }
 
-    t->device = device;
+    if (is_int_tensor) {
+        requires_grad = false;
+    }
+    t->requires_grad = requires_grad;
+
     if (device == DEVICE_CPU) {
         t->gpu_data = NULL;
         t->gpu_grad = NULL;
@@ -58,16 +63,25 @@ Tensor* create_tensor(int* shape, int ndims, DeviceType device, bool requires_gr
         t->cpu_data = NULL;
         t->cpu_grad = NULL;
 
-
-        CUDA_CHECK_GOTO(cudaMalloc((void**) &t->gpu_data, t->size * sizeof(float)), cleanup); 
-        CUDA_CHECK_GOTO(cudaMemset(t->gpu_data, 0, t->size * sizeof(float)), cleanup);
-
-        
-        if (requires_grad) {
-            CUDA_CHECK_GOTO(cudaMalloc((void**) &t->gpu_grad, t->size * sizeof(float)), cleanup);
-            CUDA_CHECK_GOTO(cudaMemset(t->gpu_grad, 0, t->size * sizeof(float)), cleanup);
-        } else {
+        if (is_int_tensor) {
+            // allocate gpu tensor for spare integer feature indices
+            t->gpu_data = NULL;
             t->gpu_grad = NULL;
+            CUDA_CHECK_GOTO(cudaMalloc((void**) &t->device_int_data, t->size * sizeof(int)), cleanup);
+            CUDA_CHECK_GOTO(cudaMemset(t->device_int_data, 0, t->size * sizeof(int)), cleanup);
+        } else {
+            // normal allocation
+            t->device_int_data = NULL;
+            CUDA_CHECK_GOTO(cudaMalloc((void**) &t->gpu_data, t->size * sizeof(float)), cleanup); 
+            CUDA_CHECK_GOTO(cudaMemset(t->gpu_data, 0, t->size * sizeof(float)), cleanup);
+
+            
+            if (requires_grad) {
+                CUDA_CHECK_GOTO(cudaMalloc((void**) &t->gpu_grad, t->size * sizeof(float)), cleanup);
+                CUDA_CHECK_GOTO(cudaMemset(t->gpu_grad, 0, t->size * sizeof(float)), cleanup);
+            } else {
+                t->gpu_grad = NULL;
+            }
         }
     } else {
         fprintf(stderr, "Error: Not a valid device.\n");
@@ -91,6 +105,8 @@ void free_tensor(Tensor* t) {
         // Free cpu data and gpu data only for owning tensors.
         free(t->cpu_data);
         cudaFree(t->gpu_data);
+
+        if (t->device_int_data) cudaFree(t->device_int_data);
     }
 
     // Gradient buffers are owned by the tensor itself, even for views.
@@ -202,7 +218,7 @@ Tensor* tensor_slice_view(Tensor* master, int start_row, int num_rows) {
     int features = master->shape[1];
     int shape[] = {num_rows, features};
 
-    Tensor* view = create_tensor(shape, 2, master->device, false);
+    Tensor* view = create_tensor(shape, 2, master->device, false, 0);
 
     // make sure view tensor data is empty
     if (view->device == DEVICE_CPU && view->cpu_data != NULL) {
@@ -238,4 +254,15 @@ void tensor_download_data(Tensor* t, float* dest) {
     } else if (t->device == DEVICE_GPU) {
         cudaMemcpy(dest, t->gpu_data, bytes, cudaMemcpyDeviceToHost);
     }
+}
+
+void tensor_upload_int_data(Tensor* t, const int* host_src) {
+    if (t == NULL || host_src == NULL || !t->is_int_tensor) return;
+    if (t->device != DEVICE_GPU || t->device_int_data == NULL) {
+        fprintf(stderr, "Error: Tensor is not a gpu integer tensor.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t bytes = t->size * sizeof(int);
+    cudaMemcpy(t->device_int_data, host_src, bytes, cudaMemcpyHostToDevice);
 }

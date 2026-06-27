@@ -38,7 +38,7 @@ Tensor* load_mnist_images(const char* filename) {
     int pixels_per_image = num_rows * num_cols;
     int shape[] = {num_images, pixels_per_image};
 
-    Tensor* images = create_tensor(shape, 2, DEVICE_CPU, false);
+    Tensor* images = create_tensor(shape, 2, DEVICE_CPU, false, 0);
 
     // read raw pixels
     unsigned char* raw_pixels = (unsigned char*)malloc(num_images * pixels_per_image);
@@ -80,7 +80,7 @@ Tensor* load_mnist_labels(const char* filename) {
     int num_classes = 10;
     int shape[] = {num_items, num_classes};
 
-    Tensor* labels = create_tensor(shape, 2, DEVICE_CPU, false);
+    Tensor* labels = create_tensor(shape, 2, DEVICE_CPU, false, 0);
 
     unsigned char* raw_labels = (unsigned char*)malloc(num_items);
     fread(raw_labels, sizeof(unsigned char), num_items, file);

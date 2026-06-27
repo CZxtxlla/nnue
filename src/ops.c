@@ -29,7 +29,7 @@ Tensor* tensor_add(Tensor* a, Tensor* b) {
     }
 
     // Create output tensor
-    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || b->requires_grad);
+    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || b->requires_grad, 0);
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
@@ -75,7 +75,7 @@ Tensor* tensor_mul(Tensor* a, Tensor* b) {
     }
 
     // Create output tensor
-    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || b->requires_grad);
+    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || b->requires_grad, 0);
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
@@ -120,7 +120,7 @@ Tensor* tensor_add_bias(Tensor* a, Tensor * bias) {
         return NULL;
     }
 
-    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || bias->requires_grad);
+    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad || bias->requires_grad, 0);
 
     // Perform calculation on proper device
     if (a->device == DEVICE_CPU) {
@@ -162,7 +162,7 @@ Tensor* tensor_matmul(Tensor* a, Tensor* b) {
     }
 
     int out_shape[] = {a->shape[0], b->shape[1]};
-    Tensor* out = create_tensor(out_shape, 2, a->device, a->requires_grad || b->requires_grad);
+    Tensor* out = create_tensor(out_shape, 2, a->device, a->requires_grad || b->requires_grad, 0);
 
     if (a->device == DEVICE_CPU) {
         fprintf(stderr, "Error: tensors must be on the gpu.\n");
@@ -189,7 +189,7 @@ Tensor* tensor_matmul(Tensor* a, Tensor* b) {
 
 Tensor* tensor_relu(Tensor* a) {
     
-    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad);
+    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad, 0);
 
     if (a->device == DEVICE_CPU) {
         fprintf(stderr, "Error: tensors must be on the gpu.\n");
@@ -216,7 +216,7 @@ Tensor* tensor_relu(Tensor* a) {
 
 Tensor* tensor_mse(Tensor* pred, Tensor* target) {
     int shape[] = {1};
-    Tensor* out = create_tensor(shape, 1, pred->device, true);
+    Tensor* out = create_tensor(shape, 1, pred->device, true, 0);
     out->op = OP_MSE;
     out->num_parents = 2;
     out->parents = (Tensor**)malloc(2 * sizeof(Tensor*));
@@ -234,7 +234,7 @@ Tensor* tensor_mse(Tensor* pred, Tensor* target) {
 
 Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target) {
     int shape[] = {1};
-    Tensor* out = create_tensor(shape, 1, pred->device, true);
+    Tensor* out = create_tensor(shape, 1, pred->device, true, 0);
     out->op = OP_CROSS_ENTROPY;
     out->num_parents = 2;
     out->parents = (Tensor**)malloc(2 * sizeof(Tensor*));
