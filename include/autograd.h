@@ -37,6 +37,9 @@ void backward_gpu_cross_entropy(Tensor* t, Tensor* pred, Tensor* target);
 void backward_sparse_linear(Tensor* t);
 void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tensor* bias);
 
+void backward_blended_loss(Tensor* t);
+void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
+
 
 void build_topo(Tensor* u, TensorArray* topo);
 void free_graph(Tensor* root);

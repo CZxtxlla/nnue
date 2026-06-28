@@ -278,3 +278,24 @@ Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bi
     }
     return out;
 }
+
+Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda) {
+    int batch_size = pred->shape[0];
+    int shape[] = {batch_size, 1};
+
+    Tensor* out = create_tensor(shape, 2, pred->device, true, 0);
+    out->op = OP_BLENDED_LOSS;
+    out->num_parents = 3;
+    out->parents = (Tensor**)malloc(3 * sizeof(Tensor*));
+    out->parents[0] = pred;
+    out->parents[1] = teacher_probs;
+    out->parents[2] = outcomes;
+
+    if (pred->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
+    } else if (pred->device == DEVICE_GPU) {
+        blended_loss_gpu_forward(pred, teacher_probs, outcomes, lambda, out);
+    }
+    return out;
+}

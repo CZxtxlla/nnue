@@ -130,6 +130,20 @@ __global__ void backward_sparse_weight_kernel(const int* d_inputs, const float* 
     }
 }
 
+__global__ void backward_blended_loss_kernel(const float* d_pred, const float* d_teacher_probs, const float* d_outcomes, const float* d_lossgrad, float* d_predgrad, float lambda, int batch_size) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= batch_size) return;
+
+    float p_pred = chess_sigmoid(d_pred[i]);
+    float p_teach = d_teacher_probs[i];
+    float z = d_outcomes[i];
+
+    float dL_dp = 2.0f * (lambda * (p_pred - p_teach) + (1.0f - lambda) * (p_pred - z)); 
+    float dp_dy = (1.0f / SIGMOID_K) * p_pred * (1.0f - p_pred);
+
+    d_predgrad[i] = (d_lossgrad[0] / batch_size) * dL_dp * dp_dy;
+}
+
 
 
 // -------------- Helpers ---------------
@@ -278,9 +292,23 @@ void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tens
         dim3 dimBlock(tx, ty, 1);
         dim3 dimGrid((hidden_dim + tx - 1) / tx, (batch_size + ty - 1) / ty, 1);
 
-        backward_sparse_weight_kernel<<<dimBlock, dimGrid>>>(inputs->device_int_data, t->gpu_grad, weights->gpu_grad, batch_size, active_count, hidden_dim);
+        backward_sparse_weight_kernel<<<dimGrid, dimBlock>>>(inputs->device_int_data, t->gpu_grad, weights->gpu_grad, batch_size, active_count, hidden_dim);
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
+    return;
+
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda){
+    int batch_size = pred->shape[0];
+
+    int threads = 256;
+    int blocks = (batch_size + threads - 1) / threads;
+
+    backward_blended_loss_kernel<<<blocks, threads>>>(pred->gpu_data, teacher_probs->gpu_data, outcomes->gpu_data, t->gpu_grad, pred->gpu_grad, lambda, batch_size);
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     return;
 
 cleanup:

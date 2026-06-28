@@ -138,7 +138,7 @@ void backward_cross_entropy(Tensor* t) {
 
 void backward_sparse_linear(Tensor* t) {
     if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
-        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a cross entropy operation.\n");
+        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a sparse linear operation.\n");
         return;
     }
 
@@ -151,6 +151,24 @@ void backward_sparse_linear(Tensor* t) {
         return;
     } else {
         backward_gpu_sparse_linear(t, inputs, weights, bias);
+    }
+}
+
+void backward_blended_loss(Tensor* t) {
+    if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
+        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a blended loss operation.\n");
+        return;
+    }
+
+    Tensor* pred = t->parents[0];
+    Tensor* teacher_probs = t->parents[1];
+    Tensor* outcomes = t->parents[2];
+
+    if (t->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
+    } else {
+        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 0.5);
     }
 }
 
@@ -280,9 +298,11 @@ void backward(Tensor* t) {
             backward_cross_entropy(current);
         } else if (current->op == OP_SPARSE_LINEAR) {
             backward_sparse_linear(current);
+        } else if (current->op == OP_BLENDED_LOSS) {
+            backward_blended_loss(current);
         }
     }
-
+    
     // free allocated memory
     tensor_array_free(&topo);
 }

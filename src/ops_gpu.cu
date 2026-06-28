@@ -3,7 +3,7 @@
 #include "../include/ops.h"
 #include "../include/cuda_utils.h"
 #include "../include/context.cuh"
-#include <cmath>
+#include <math.h>
 
 // define global handle
 cublasHandle_t global_cublas_handle;
@@ -117,6 +117,23 @@ __global__ void forward_sparse_linear_kernel(const int* d_inputs, const float* d
 
     // write to dense output tensor
     d_out[b * hidden_dim + h] = acc;
+}
+
+__global__ void forward_blended_loss_kernel(const float* d_pred, const float* d_teacher_probs, const float* d_outcomes, float* d_out, float lambda, int batch_size) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= batch_size) return;
+
+    float p_pred = chess_sigmoid(d_pred[i]);
+    float p_teach = d_teacher_probs[i];
+    float z = d_outcomes[i];
+
+    float teacher_term = p_pred - p_teach;
+    float outcome_term = p_pred - z;
+
+    float loss_val = lambda * teacher_term * teacher_term + ((1.0f - lambda) * outcome_term * outcome_term); // loss function
+
+    atomicAdd(&d_out[0], loss_val / batch_size);
 }
 
 
@@ -261,6 +278,20 @@ void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Te
 
     forward_sparse_linear_kernel<<<dimGrid, dimBlock>>>(inputs->device_int_data, weights->gpu_data, bias->gpu_data, out->gpu_data, batch_size, active_count, hidden_dim);
 
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+
+    return;
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda, Tensor* out) {
+    int batch_size = pred->shape[0];
+    int threads = 256;
+    int blocks = (batch_size + threads - 1) / threads;
+
+    forward_blended_loss_kernel<<<blocks, threads>>>(pred->gpu_data, teacher_probs->gpu_data, outcomes->gpu_data, out->gpu_data, lambda, batch_size);
+    
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;

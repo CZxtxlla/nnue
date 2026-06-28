@@ -32,6 +32,9 @@ void cross_entropy_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);
 Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bias);
 void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Tensor* out);
 
+Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
+void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda, Tensor* out);
+
 #ifdef __cplusplus
 }
 #endif

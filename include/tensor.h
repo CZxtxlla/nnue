@@ -23,7 +23,8 @@ typedef enum {
     OP_ADDBIAS,
     OP_MSE,
     OP_CROSS_ENTROPY,
-    OP_SPARSE_LINEAR
+    OP_SPARSE_LINEAR,
+    OP_BLENDED_LOSS
 } opType;
 
 typedef struct Tensor {
