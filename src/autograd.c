@@ -104,6 +104,7 @@ void backward_mse(Tensor* t) {
     // takes tensor t result of mse oper and computes parents gradients
     if (t->op != OP_MSE || t->num_parents != 2) {
         fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a mse operation.\n");
+        return;
     }
 
     Tensor* pred = t->parents[0];
@@ -121,6 +122,7 @@ void backward_cross_entropy(Tensor* t) {
     // takes tensor t result of cross entropy loss and computes parents gradients
     if (t->op != OP_CROSS_ENTROPY || t->num_parents != 2) {
         fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a cross entropy operation.\n");
+        return;
     }
 
     Tensor* pred = t->parents[0];
@@ -131,6 +133,24 @@ void backward_cross_entropy(Tensor* t) {
         return;
     } else {
         backward_gpu_cross_entropy(t, pred, target);
+    }
+}
+
+void backward_sparse_linear(Tensor* t) {
+    if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
+        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a cross entropy operation.\n");
+        return;
+    }
+
+    Tensor* inputs = t->parents[0];
+    Tensor* weights = t->parents[1];
+    Tensor* bias = t->parents[2];
+
+    if (t->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
+    } else {
+        backward_gpu_sparse_linear(t, inputs, weights, bias);
     }
 }
 
@@ -240,7 +260,7 @@ void backward(Tensor* t) {
 
     build_topo(t, &topo);
 
-    // seed the final output gradient witrh 1.0, t->grad[0] = 1.0f;
+    // seed the final output gradient with 1.0, t->grad[0] = 1.0f;
 
     for (int i = topo.size - 1; i >= 0; i--) {
         Tensor* current = topo.array[i];
@@ -258,15 +278,11 @@ void backward(Tensor* t) {
             backward_mse(current);
         } else if (current->op == OP_CROSS_ENTROPY) {
             backward_cross_entropy(current);
+        } else if (current->op == OP_SPARSE_LINEAR) {
+            backward_sparse_linear(current);
         }
-
     }
 
     // free allocated memory
     tensor_array_free(&topo);
-
-
-
 }
-
-

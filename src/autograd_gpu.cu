@@ -100,6 +100,36 @@ __global__ void cross_entropy_backward_kernel(float* pred, float* target, float*
     }
 }
 
+__global__ void backward_sparse_bias_kernel(const float* d_out_grad, float* d_bias_grad, int batch_size, int hidden_dim) {
+    int h = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (h < hidden_dim) {
+        float sum = 0.0f;
+        for (int b = 0; b < batch_size; b++) {
+            sum += d_out_grad[b * hidden_dim + h];
+        }
+
+        atomicAdd(&d_bias_grad[h], sum);
+    }
+}
+
+__global__ void backward_sparse_weight_kernel(const int* d_inputs, const float* d_out_grad, float* d_weight_grad, int batch_size, int active_count, int hidden_dim) {
+    int h = blockIdx.x * blockDim.x + threadIdx.x;
+    int b = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (b >= batch_size || h >= hidden_dim) return;
+
+    float grad_out = d_out_grad[b * hidden_dim + h];
+    int batch_offset = b * active_count;
+
+    for (int a = 0; a < active_count; a++) {
+        int feature_idx = d_inputs[batch_offset + a];
+        if (feature_idx < 0) continue;
+
+        atomicAdd(&d_weight_grad[feature_idx * hidden_dim + h], grad_out);
+    }
+}
+
 
 
 // -------------- Helpers ---------------
@@ -223,6 +253,34 @@ void backward_gpu_cross_entropy(Tensor* t, Tensor* pred, Tensor* target) {
 
     cross_entropy_backward_kernel<<<dimGrid, dimBlock>>>(pred->gpu_data, target->gpu_data, pred->gpu_grad, t->gpu_grad, pred->size, pred->shape[0]);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    return;
+
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tensor* bias) {
+    int batch_size = inputs->shape[0];
+    int active_count = inputs->shape[1];
+    int hidden_dim = weights->shape[1];
+
+    if (bias->requires_grad) {
+        int threads = 256;
+        int blocks = (hidden_dim + threads - 1) / threads;
+
+        backward_sparse_bias_kernel<<<blocks, threads>>>(t->gpu_grad, bias->gpu_grad, batch_size, hidden_dim);
+        CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    }
+
+    if (weights->requires_grad) {
+        int tx = 32;
+        int ty = 8;
+        dim3 dimBlock(tx, ty, 1);
+        dim3 dimGrid((hidden_dim + tx - 1) / tx, (batch_size + ty - 1) / ty, 1);
+
+        backward_sparse_weight_kernel<<<dimBlock, dimGrid>>>(inputs->device_int_data, t->gpu_grad, weights->gpu_grad, batch_size, active_count, hidden_dim);
+        CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    }
     return;
 
 cleanup:
