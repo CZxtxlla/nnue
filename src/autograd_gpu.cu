@@ -155,6 +155,32 @@ __global__ void backward_blended_loss_kernel(const float* d_pred, const float* d
     d_predgrad[i] = (d_lossgrad[0] / batch_size) * dL_dp * dp_dy;
 }
 
+__global__ void backward_perspective_concat_kernel(const float* out_grad, const int* stm, float* w_grad, float* b_grad, int batch_size, int half_dim) {
+    int h = blockIdx.x * blockDim.x + threadIdx.x;
+    int b = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (b >= batch_size || h >= half_dim) return;
+
+    int is_black_turn = stm[b];
+    float grad = out_grad[b * (half_dim * 2) + h];
+
+    if (is_black_turn) {
+        // black move
+        if (h < half_dim) {
+            atomicAdd(&b_grad[b * half_dim + h], grad);
+        } else {
+            atomicAdd(&w_grad[b * half_dim + (h - half_dim)], grad);
+        }
+    } else {
+        // white move
+        if (h < half_dim) {
+            atomicAdd(&w_grad[b * half_dim + h], grad);
+        } else {
+            atomicAdd(&b_grad[b * half_dim + (h - half_dim)], grad);
+        }
+    }
+}
+
 
 
 // -------------- Helpers ---------------
@@ -338,6 +364,28 @@ void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, T
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     return;
 
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void backward_gpu_perspective_concat(Tensor* t, Tensor* w_acc, Tensor* b_acc, Tensor* stm) {
+    int batch_size = w_acc->shape[0];
+    int half_dim = w_acc->shape[1];
+
+    if (w_acc->requires_grad || b_acc->requires_grad) {
+        int tx = 32;
+        int ty = 8;
+        dim3 dimBlock(tx, ty);
+        dim3 dimGrid((half_dim * 2 + tx - 1) / tx, (batch_size + ty - 1) / ty);
+
+        backward_perspective_concat_kernel<<<dimGrid, dimBlock>>>(
+            t->gpu_grad, stm->device_int_data, 
+            w_acc->gpu_grad, b_acc->gpu_grad, 
+            batch_size, half_dim
+        );
+        CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    }
+    return;
 cleanup:
     exit(EXIT_FAILURE);
 }

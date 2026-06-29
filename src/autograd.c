@@ -29,7 +29,7 @@ void backward_mul(Tensor* t) {
     // Takes tensor t which is the result of a multiplication operation and computes gradients for its parents
 
     if (t->op != OP_MUL || t->num_parents != 2) {
-        fprintf(stderr, "Error: backward_add called on tensor that is not the result of a multiplication operation.\n");
+        fprintf(stderr, "Error: backward_mul called on tensor that is not the result of a multiplication operation.\n");
         return;
     }
 
@@ -48,7 +48,7 @@ void backward_add_bias(Tensor* t) {
     // Takes tensor t which is the result of an add bias operation and computes gradients for its parents
 
     if (t->op != OP_ADDBIAS || t->num_parents != 2) {
-        fprintf(stderr, "Error: backward_add called on tensor that is not the result of an add bias operation.\n");
+        fprintf(stderr, "Error: backward_add_bias called on tensor that is not the result of an add bias operation.\n");
         return;
     }
 
@@ -67,7 +67,7 @@ void backward_matmul(Tensor* t) {
     // Takes tensor t which is the result of a matrix multiplication operation and computes gradients for its parents
 
     if (t->op != OP_MATMUL || t->num_parents != 2) {
-        fprintf(stderr, "Error: backward_add called on tensor that is not the result of a matrix multiplication operation.\n");
+        fprintf(stderr, "Error: backward_matmul called on tensor that is not the result of a matrix multiplication operation.\n");
         return;
     }
 
@@ -86,7 +86,7 @@ void backward_relu(Tensor* t) {
     // Takes tensor t which is the result of a relu operation and computes gradients for its parents
 
     if (t->op != OP_RELU || t->num_parents != 1) {
-        fprintf(stderr, "Error: backward_add called on tensor that is not the result of a relu operation.\n");
+        fprintf(stderr, "Error: backward_relu called on tensor that is not the result of a relu operation.\n");
         return;
     }
 
@@ -104,7 +104,7 @@ void backward_clipped_relu(Tensor* t) {
     // Takes tensor t which is the result of a clipped relu operation and computes gradients for its parents
 
     if (t->op != OP_CLIPPED_RELU || t->num_parents != 1) {
-        fprintf(stderr, "Error: backward_add called on tensor that is not the result of a clipped relu operation.\n");
+        fprintf(stderr, "Error: backward_clipped_relu called on tensor that is not the result of a clipped relu operation.\n");
         return;
     }
 
@@ -139,7 +139,7 @@ void backward_mse(Tensor* t) {
 void backward_cross_entropy(Tensor* t) {
     // takes tensor t result of cross entropy loss and computes parents gradients
     if (t->op != OP_CROSS_ENTROPY || t->num_parents != 2) {
-        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a cross entropy operation.\n");
+        fprintf(stderr, "Error: backward_cross_entropy called on tensor that is not the result of a cross entropy operation.\n");
         return;
     }
 
@@ -156,7 +156,7 @@ void backward_cross_entropy(Tensor* t) {
 
 void backward_sparse_linear(Tensor* t) {
     if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
-        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a sparse linear operation.\n");
+        fprintf(stderr, "Error: backward_sparse_linear called on tensor that is not the result of a sparse linear operation.\n");
         return;
     }
 
@@ -174,7 +174,7 @@ void backward_sparse_linear(Tensor* t) {
 
 void backward_blended_loss(Tensor* t) {
     if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
-        fprintf(stderr, "Error: backward_mse called on tensor that is not the result of a blended loss operation.\n");
+        fprintf(stderr, "Error: backward_blended_loss called on tensor that is not the result of a blended loss operation.\n");
         return;
     }
 
@@ -187,6 +187,24 @@ void backward_blended_loss(Tensor* t) {
         return;
     } else {
         backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 0.5);
+    }
+}
+
+void backward_perspective_concat(Tensor* t) {
+    if (t->op != OP_PERSPECTIVE_CONCAT || t->num_parents != 3) {
+        fprintf(stderr, "Error: backward_perspective_concat called on tensor that is not the result of a blended loss operation.\n");
+        return;
+    }
+    
+    Tensor* w_acc = t->parents[0];
+    Tensor* b_acc = t->parents[1];
+    Tensor* stm = t->parents[2];
+
+    if (t->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
+    } else {
+        backward_gpu_perspective_concat(t, w_acc, b_acc, stm);
     }
 }
 
@@ -320,6 +338,8 @@ void backward(Tensor* t) {
             backward_sparse_linear(current);
         } else if (current->op == OP_BLENDED_LOSS) {
             backward_blended_loss(current);
+        } else if (current->op == OP_PERSPECTIVE_CONCAT) {
+            backward_perspective_concat(current);
         }
     }
     

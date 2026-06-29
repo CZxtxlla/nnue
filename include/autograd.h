@@ -43,6 +43,9 @@ void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tens
 void backward_blended_loss(Tensor* t);
 void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
 
+void backward_perspective_concat(Tensor* t);
+void backward_gpu_perspective_concat(Tensor* t, Tensor* w_acc, Tensor* b_acc, Tensor* stm);
+
 
 void build_topo(Tensor* u, TensorArray* topo);
 void free_graph(Tensor* root);
