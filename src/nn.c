@@ -243,3 +243,31 @@ MLP* load_mlp(char* location, DeviceType device) {
     fclose(file);
     return model;
 }
+
+// ------- NNUE ----------
+
+NNUE* create_nnue(int in_features, int accumulator_size, int* hidden_dims, int num_hidden_layers) {
+    NNUE* model = (NNUE*)malloc(sizeof(NNUE));
+    if (model == NULL) {
+        fprintf(stderr, "Error: failed to allocate memory for the NNUE struct.\n");
+        return NULL;
+    }
+
+    model->dev = DEVICE_GPU;
+    model->num_hidden_layers = num_hidden_layers;
+
+    if (hidden_dims[0] != accumulator_size * 2) {
+        fprintf(stderr, "Error: hidden_dims[0] must be exactly twice the accumulator_size (expected %d, got %d).\n", accumulator_size * 2, hidden_dims[0]);
+        free(model);
+        return NULL;
+    }
+
+    model->feature_transformer = create_linear_layer(in_features, accumulator_size, DEVICE_GPU);
+
+    model->hidden_layers = (LinearLayer**)malloc(sizeof(LinearLayer*) * num_hidden_layers);
+    for (int i = 0; i < num_hidden_layers; i++) {
+        model->hidden_layers[i] = create_linear_layer(hidden_dims[i], hidden_dims[i + 1], DEVICE_GPU);
+    }
+
+    return model;
+}

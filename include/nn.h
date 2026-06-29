@@ -36,6 +36,25 @@ void free_mlp(MLP* model); // free memory allocated for the mlp and its layers
 int save_mlp(MLP* model, char* location); // save MLP to specified file 
 MLP* load_mlp(char* location, DeviceType device); // load MLP saved in location to model
 
+// ----- NNUE HalfKP architecture ------
+
+typedef struct {
+    LinearLayer* feature_transformer; // massive sparse layer 41024 -> 256
+    LinearLayer** hidden_layers; // dense layers
+    int num_hidden_layers;
+    DeviceType dev;
+} NNUE;
+
+// in features 41024, accumulator size 256, hidden dims {512, 21, 32, 1}
+NNUE* create_nnue(int in_features, int accumulator_size, int* hidden_dims, int num_hidden_layers);
+
+// input tesnros contain the active feature indices
+Tensor* nnue_forward(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move);
+
+Tensor** nnue_get_parameters(NNUE* model, int* out_num_parameters);
+void free_nnue(NNUE* model);
+int save_nnue(NNUE* model, char* location);
+NNUE* load_nnue(char* location);
 
 #ifdef __cplusplus
 }
