@@ -144,6 +144,34 @@ __global__ void forward_blended_loss_kernel(const float* d_pred, const float* d_
     atomicAdd(&d_out[0], loss_val / batch_size);
 }
 
+__global__ void forward_perspective_concat_kernel(const float* w_acc, const float* b_acc, const int* stm, float* out, int batch_size, int half_dim) {
+    int h = blockIdx.x * blockDim.x + threadIdx.x; // hidden neuron in the concatenated layer
+    int b = blockIdx.y * blockDim.y + threadIdx.y; // batch
+
+    if (b >= batch_size || h >= half_dim * 2) return;
+
+    int is_black_turn = stm[b]; // 0 for white, 1 for black
+    float val;
+
+    if (is_black_turn) {
+        // black to move [black, white] concat
+        if (h < half_dim) {
+            val = b_acc[b * half_dim + h];
+        } else {
+            val = w_acc[b * half_dim + (h - half_dim)];
+        }
+    } else {
+        // white to move [white, black] concat
+        if (h < half_dim) {
+            val = w_acc[b * half_dim + h];
+        } else {
+            val = b_acc[b * half_dim + (h - half_dim)];
+        }
+    }
+
+    out[b * (half_dim * 2) + h] = val;
+}
+
 
 // ------------- Helpers --------------- 
 
@@ -315,6 +343,24 @@ void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outco
 
     forward_blended_loss_kernel<<<blocks, threads>>>(pred->gpu_data, teacher_probs->gpu_data, outcomes->gpu_data, out->gpu_data, lambda, batch_size);
     
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+
+    return;
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void perspective_concat_gpu_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm, Tensor* out) {
+    int batch_size = white_acc->shape[0];
+    int half_dim = white_acc->shape[1];
+
+    int tx = 32; // 32 along hidden_dim, 8 along batch size
+    int ty = 8;
+    dim3 dimBlock(tx, ty);
+    dim3 dimGrid((half_dim * 2 + tx - 1) / tx, (batch_size + ty - 1) / ty);
+
+    forward_perspective_concat_kernel<<<dimGrid, dimBlock>>>(white_acc->gpu_data, black_acc->gpu_data, stm->device_int_data, out->gpu_data, batch_size, half_dim);
+
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;

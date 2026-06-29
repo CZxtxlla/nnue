@@ -25,7 +25,8 @@ typedef enum {
     OP_MSE,
     OP_CROSS_ENTROPY,
     OP_SPARSE_LINEAR,
-    OP_BLENDED_LOSS
+    OP_BLENDED_LOSS,
+    OP_PERSPECTIVE_CONCAT
 } opType;
 
 typedef struct Tensor {

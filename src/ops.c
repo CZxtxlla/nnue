@@ -327,3 +327,26 @@ Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor*
     }
     return out;
 }
+
+Tensor* tensor_perspective_concat_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm) {
+    if (!stm->is_int_tensor) {
+        fprintf(stderr, "Error: stm must be int tensor.\n");
+        return NULL;
+    }
+
+    int batch_size = white_acc->shape[0];
+    int half_dim = white_acc->shape[1];
+    int shape[] = {batch_size, half_dim * 2};
+
+    Tensor* out = create_tensor(shape, 2, white_acc->device, white_acc->requires_grad || black_acc->requires_grad, 0);
+    out->op = OP_PERSPECTIVE_CONCAT;
+    out->num_parents = 3;
+    out->parents = (Tensor**)malloc(3 * sizeof(Tensor*));
+    out->parents[0] = white_acc;
+    out->parents[1] = black_acc;
+    out->parents[2] = stm;
+
+    perspective_concat_gpu_forward(white_acc, black_acc, stm, out);
+
+    return out;
+}

@@ -38,6 +38,9 @@ void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Te
 Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
 void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda, Tensor* out);
 
+Tensor* tensor_perspective_concat_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm); // stm = side to move
+void perspective_concat_gpu_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm, Tensor* out);
+
 #ifdef __cplusplus
 }
 #endif
