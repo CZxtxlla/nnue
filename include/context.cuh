@@ -20,6 +20,8 @@ __device__ inline float chess_sigmoid(float score) {
     return 1.0f / (1.0f + expf(-score / SIGMOID_K));
 }
 
+#define CLIPPED_RELU_MAX 1.0f // controls the clipped value for clipped relu
+
 #ifdef __cplusplus
 }
 #endif

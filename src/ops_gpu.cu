@@ -52,6 +52,14 @@ __global__ void relu_kernel(float* a, float* out, int size) {
     }
 }
 
+__global__ void clipped_relu_kernel(float* a, float* out, int size) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        float val = a[i];
+        out[i] = val > CLIPPED_RELU_MAX ? CLIPPED_RELU_MAX : (val > 0.0f ? val : 0.0f);
+    }
+}
+
 __global__ void mse_forward_kernel(float* pred, float* target, float* out, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
@@ -219,6 +227,21 @@ void relu_gpu_forward(Tensor* a, Tensor* out) {
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
     relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+
+    return;
+
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void clipped_relu_gpu_forward(Tensor* a, Tensor* out) {
+    // helper to call the relu gpu kernel
+
+    int threads = 256;
+    dim3 dimBlock(threads, 1, 1);
+    dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
+    clipped_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;

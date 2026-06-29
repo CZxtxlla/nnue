@@ -45,7 +45,7 @@ void backward_mul(Tensor* t) {
 }
 
 void backward_add_bias(Tensor* t) {
-    // Takes tensor t which is the result of a multiplication operation and computes gradients for its parents
+    // Takes tensor t which is the result of an add bias operation and computes gradients for its parents
 
     if (t->op != OP_ADDBIAS || t->num_parents != 2) {
         fprintf(stderr, "Error: backward_add called on tensor that is not the result of an add bias operation.\n");
@@ -83,7 +83,7 @@ void backward_matmul(Tensor* t) {
 }
 
 void backward_relu(Tensor* t) {
-    // Takes tensor t which is the result of a multiplication operation and computes gradients for its parents
+    // Takes tensor t which is the result of a relu operation and computes gradients for its parents
 
     if (t->op != OP_RELU || t->num_parents != 1) {
         fprintf(stderr, "Error: backward_add called on tensor that is not the result of a relu operation.\n");
@@ -97,6 +97,24 @@ void backward_relu(Tensor* t) {
         return;
     } else if (t->device == DEVICE_GPU) {
         backward_gpu_relu(t, a);
+    }
+}
+
+void backward_clipped_relu(Tensor* t) {
+    // Takes tensor t which is the result of a clipped relu operation and computes gradients for its parents
+
+    if (t->op != OP_CLIPPED_RELU || t->num_parents != 1) {
+        fprintf(stderr, "Error: backward_add called on tensor that is not the result of a clipped relu operation.\n");
+        return;
+    }
+
+    Tensor* a = t->parents[0];
+
+    if (t->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
+    } else if (t->device == DEVICE_GPU) {
+        backward_gpu_clipped_relu(t, a);
     }
 }
 
@@ -292,6 +310,8 @@ void backward(Tensor* t) {
             backward_add_bias(current);
         } else if (current->op == OP_RELU) {
             backward_relu(current);
+        } else if (current->op == OP_CLIPPED_RELU) {
+            backward_clipped_relu(current);
         } else if (current->op == OP_MSE) {
             backward_mse(current);
         } else if (current->op == OP_CROSS_ENTROPY) {
