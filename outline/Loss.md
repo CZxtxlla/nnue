@@ -10,7 +10,7 @@ $$
 
 Where $K$ is some scaling constant, [stockfish](https://official-stockfish.github.io/docs/nnue-pytorch-wiki/docs/nnue.html#loss) uses 410 but it depends on the engine/data. 
 
-Then we can apply a weighted mean squared error to achieve the final loss
+Then we canv apply a weighted mean squared error to achieve the final loss
 
 $$
 \mathcal{L} = \lambda(\hat{p} - p_{teacher})^2 + (1 - \lambda)(\hat{p} - z)^2
