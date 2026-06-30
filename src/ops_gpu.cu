@@ -56,7 +56,7 @@ __global__ void clipped_relu_kernel(float* a, float* out, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         float val = a[i];
-        out[i] = val > CLIPPED_RELU_MAX ? CLIPPED_RELU_MAX : (val > 0.0f ? val : 0.0f);
+        out[i] = val > CLIPPED_RELU_MAX ? CLIPPED_RELU_MAX : (val > 0.0f ? val : 0.01f * val);
     }
 }
 

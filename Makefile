@@ -7,10 +7,10 @@ CFLAGS = -Wall -O3
 NVCCFLAGS = -O3 -use_fast_math -lcublas
 
 # Define target executable
-TARGET = train_mnist
+TARGET = test_nnue
 
 # Core Library Files (Everything EXCEPT files containing a main() function)
-CORE_C_SOURCES = src/autograd.c src/ops.c src/nn.c src/dataset.c
+CORE_C_SOURCES = src/autograd.c src/ops.c src/nn.c
 CORE_CU_SOURCES = src/ops_gpu.cu src/autograd_gpu.cu src/optim_gpu.cu src/tensor.cu src/optim.cu
 
 # Object files for the core library
@@ -21,8 +21,8 @@ CORE_CU_OBJECTS = $(CORE_CU_SOURCES:.cu=.o)
 all: $(TARGET)
 
 # Rule to link the training demo (We still use NVCC here to pull in the CUDA libraries for the backend)
-$(TARGET): $(CORE_C_OBJECTS) $(CORE_CU_OBJECTS) src/train_mnist.o
-	$(NVCC) $(CORE_C_OBJECTS) $(CORE_CU_OBJECTS) src/train_mnist.o -o $(TARGET) -lcublas
+$(TARGET): $(CORE_C_OBJECTS) $(CORE_CU_OBJECTS) src/test_nnue.o
+	$(NVCC) $(CORE_C_OBJECTS) $(CORE_CU_OBJECTS) src/test_nnue.o -o $(TARGET) -lcublas
 
 # Rule to compile standard C files
 %.o: %.c

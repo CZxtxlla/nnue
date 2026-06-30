@@ -173,7 +173,7 @@ void backward_sparse_linear(Tensor* t) {
 }
 
 void backward_blended_loss(Tensor* t) {
-    if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
+    if (t->op != OP_BLENDED_LOSS || t->num_parents != 3) {
         fprintf(stderr, "Error: backward_blended_loss called on tensor that is not the result of a blended loss operation.\n");
         return;
     }
@@ -186,7 +186,7 @@ void backward_blended_loss(Tensor* t) {
         fprintf(stderr, "Error: tensor must be on the gpu.\n");
         return;
     } else {
-        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 0.5);
+        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 1.0);
     }
 }
 

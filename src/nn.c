@@ -330,7 +330,7 @@ void free_nnue(NNUE* model) {
 
 #define NNUE_MAGIC_NUMBER 0x4E4E5545 // Hex for "NNUE"
 
-int save_nnue(NNUE* model, char* location) {
+int save_nnue(NNUE* model, const char* location) {
     if (model == NULL || location == NULL) {
         return 0; // failure
     } 
@@ -345,7 +345,7 @@ int save_nnue(NNUE* model, char* location) {
 
     fwrite(&(model->num_hidden_layers), sizeof(int), 1, file); // write the number of hidden layers
 
-    // --- Helper macro to save a LinearLayer ---
+    // Helper macro to save linear layer
     #define SAVE_LAYER(layer) do { \
         int in_feat = layer->weight->shape[0]; \
         int out_feat = layer->weight->shape[1]; \

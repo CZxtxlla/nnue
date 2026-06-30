@@ -83,7 +83,7 @@ __global__ void backward_clipped_relu_kernel(float* t_grad, float* a_grad, float
     if (i < size) {
         if (a_grad != NULL) {
             float val = a_data[i];
-            float grad = (val > 0.0f && val < CLIPPED_RELU_MAX) ? t_grad[i] : 0.0f;
+            float grad = (val > 0.0f && val < CLIPPED_RELU_MAX) ? t_grad[i] : ((val <= 0.0f) ? (0.01f * t_grad[i]) : 0.0f);
             atomicAdd(&a_grad[i], grad);
         }
     }
@@ -150,7 +150,7 @@ __global__ void backward_blended_loss_kernel(const float* d_pred, const float* d
     float z = d_outcomes[i];
 
     float dL_dp = 2.0f * (lambda * (p_pred - p_teach) + (1.0f - lambda) * (p_pred - z)); 
-    float dp_dy = (1.0f / SIGMOID_K) * p_pred * (1.0f - p_pred);
+    float dp_dy = p_pred * (1.0f - p_pred); // * (1.0f / SIGMOID_K)
 
     d_predgrad[i] = (d_lossgrad[0] / batch_size) * dL_dp * dp_dy;
 }
