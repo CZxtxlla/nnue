@@ -57,16 +57,21 @@ void free_nnue_dataset(NnueDataset* data) {
 }
 
 NNUE* run_nnue_training(DeviceType device, const char* label, NnueDataset* dataset) {
-    int epochs = 1; 
+    int epochs = 10; 
     int batch_size = 4096; 
     int num_batches = dataset->num_samples / batch_size;
+
+    // lr configuration
+    float initial_lr = 0.001f;
+    int drop_every_n_epochs = 3; 
+    float drop_factor = 0.5f; 
 
     int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 32, 32, 1}; 
     NNUE* model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 3);
     
     int num_params;
     Tensor** params = nnue_get_parameters(model, &num_params);
-    Adam* optimizer = adam_create(params, num_params, 0.001f);
+    Adam* optimizer = adam_create(params, num_params, initial_lr);
 
     int batch_shape_active[] = {batch_size, MAX_ACTIVE};
     int batch_shape_scalar[] = {batch_size, 1};
@@ -85,6 +90,13 @@ NNUE* run_nnue_training(DeviceType device, const char* label, NnueDataset* datas
     printf("\n[%s] Starting training on %d samples...\n", label, dataset->num_samples);
 
     for (int epoch = 0; epoch < epochs; epoch++) {
+        
+        // lerate decay
+        if (epoch > 0 && epoch % drop_every_n_epochs == 0) {
+            optimizer->lr *= drop_factor;
+            printf("\n>>> [Scheduler] Learning Rate reduced to: %f <<<\n\n", optimizer->lr);
+        }
+        
         float total_loss = 0.0f;
         for (int b = 0; b < num_batches; b++) {
             // De-interleave the binary data into the host buffers
@@ -126,7 +138,8 @@ int main(void) {
     if (!dataset) return 1;
     NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", dataset);
     if (trained_model) {
-        save_nnue(trained_model, "halfkp_model.nnue");
+        save_nnue(trained_model, "halfkp_model_float.nnue");
+        save_quantized_nnue(trained_model, "halfkp_model_quant.nnue");
         free_nnue(trained_model);
     }
     free_nnue_dataset(dataset);

@@ -439,3 +439,59 @@ NNUE* load_nnue(char* location, DeviceType device) {
     fclose(file);
     return model;
 }
+
+// Helper to scale float to int16 (Scale = 255)
+static inline int16_t quantize_float(float val) {
+    float scaled = val * 255.0f;
+    if (scaled > 32767.0f) return 32767;
+    if (scaled < -32768.0f) return -32768;
+    return (int16_t)scaled;
+}
+
+int save_quantized_nnue(NNUE* model, const char* location) {
+    if (model == NULL || location == NULL) return 0;
+
+    FILE* file = fopen(location, "wb");
+    if (file == NULL) {
+        fprintf(stderr, "Error: could not open file %s.\n", location);
+        return 0;
+    }
+
+    printf("Quantizing floats to int16_t and saving...\n");
+
+    Quantized_NNUE* q_net = (Quantized_NNUE*)malloc(sizeof(Quantized_NNUE));
+    memset(q_net, 0, sizeof(Quantized_NNUE));
+
+    #define QUANTIZE_LAYER(src_layer, dest_w, dest_b) do { \
+        int w_size = src_layer->weight->size; \
+        int b_size = src_layer->bias->size; \
+        float* w_cpu = (float*)malloc(w_size * sizeof(float)); \
+        float* b_cpu = (float*)malloc(b_size * sizeof(float)); \
+        tensor_download_data(src_layer->weight, w_cpu); \
+        tensor_download_data(src_layer->bias, b_cpu); \
+        for(int i = 0; i < w_size; i++) ((int16_t*)dest_w)[i] = quantize_float(w_cpu[i]); \
+        for(int i = 0; i < b_size; i++) ((int16_t*)dest_b)[i] = quantize_float(b_cpu[i]); \
+        free(w_cpu); free(b_cpu); \
+    } while(0)
+
+    // Quantize Feature Transformer
+    QUANTIZE_LAYER(model->feature_transformer, q_net->feature_weights, q_net->feature_bias);
+
+    // Quantize L1 (Hidden Layer 0)
+    QUANTIZE_LAYER(model->hidden_layers[0], q_net->l1_weights, q_net->l1_bias);
+
+    // Quantize L2 (Hidden Layer 1)
+    QUANTIZE_LAYER(model->hidden_layers[1], q_net->l2_weights, q_net->l2_bias);
+
+    // Quantize Output Layer (Hidden Layer 2)
+    QUANTIZE_LAYER(model->hidden_layers[2], q_net->output_weight, q_net->output_bias);
+
+    // Wrtie the entire struct as one raw binary block
+    fwrite(q_net, sizeof(Quantized_NNUE), 1, file);
+
+    free(q_net);
+    fclose(file);
+    
+    printf("saved successfully to %s\n", location);
+    return 1;
+}

@@ -56,6 +56,25 @@ void free_nnue(NNUE* model);
 int save_nnue(NNUE* model, const char* location);
 NNUE* load_nnue(char* location, DeviceType device);
 
+#define FEATURE_SIZE 41024 
+#define L1_SIZE 256
+
+typedef struct {
+    int16_t feature_weights[FEATURE_SIZE][L1_SIZE];
+    int16_t feature_bias[L1_SIZE];
+    
+    int16_t l1_weights[512][32];
+    int16_t l1_bias[32];
+    
+    int16_t l2_weights[32][32];
+    int16_t l2_bias[32];
+    
+    int16_t output_weight[32][1];
+    int16_t output_bias[1];
+} Quantized_NNUE;
+
+int save_quantized_nnue(NNUE* model, const char* location);
+
 #ifdef __cplusplus
 }
 #endif

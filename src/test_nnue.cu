@@ -114,7 +114,7 @@ int main(void) {
     init_framework();
     
     printf("Loading model...\n");
-    NNUE* model = load_nnue("dead.nnue", DEVICE_GPU);
+    NNUE* model = load_nnue("halfkp_model_float.nnue", DEVICE_GPU);
     if (!model) {
         fprintf(stderr, "Failed to load model.\n");
         return 1;
@@ -122,7 +122,7 @@ int main(void) {
 
     const char* start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     const char* white_winning = "4k3/Q7/4K3/8/8/8/8/8 w - - 0 1";
-    const char* black_winning = "4k3/8/8/8/8/4k3/q7/4K3 b - - 0 1";
+    const char* black_winning = "4k3/8/8/8/8/4k3/q7/4K3 w - - 0 1";
 
     const char* test_1 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
     const char* test_2 = "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
