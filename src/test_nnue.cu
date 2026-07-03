@@ -8,32 +8,36 @@
 #include "../include/autograd.h"
 #include "../include/nn.h"
 
-// Forward declarations for your framework
 extern "C" void init_framework();
 extern "C" void cleanup_framework();
 
 #define MAX_ACTIVE 32
 
-// --- FEN Parsing Helpers ---
+// --- FEN Parsing Helpers (Updated for 768) ---
+
+// 0-5 for White, 6-11 for Black (Matches python-chess: P=0, K=5, p=6, k=11)
 int char_to_piece(char c) {
     switch (c) {
-        case 'P': return 0; case 'N': return 1; case 'B': return 2; case 'R': return 3; case 'Q': return 4;
-        case 'p': return 5; case 'n': return 6; case 'b': return 7; case 'r': return 8; case 'q': return 9;
+        case 'P': return 0; case 'N': return 1; case 'B': return 2; case 'R': return 3; case 'Q': return 4; case 'K': return 5;
+        case 'p': return 6; case 'n': return 7; case 'b': return 8; case 'r': return 9; case 'q': return 10; case 'k': return 11;
         default: return -1;
     }
 }
 
+// Flip square vertically (A1 -> A8)
 int flip_sq(int sq) { return sq ^ 56; }
-int flip_piece(int p_type) { return (p_type + 5) % 10; }
+
+// Swap White (0-5) and Black (6-11)
+int flip_piece(int p_type) { return (p_type + 6) % 12; }
 
 // --- Evaluation Function ---
 void evaluate_fen(NNUE* model, const char* fen) {
     int w_idx[MAX_ACTIVE], b_idx[MAX_ACTIVE];
     int stm;
-    int wk_sq = -1, bk_sq = -1;
     int pieces[32], squares[32];
     int num_pieces = 0;
 
+    // Initialize arrays to -1 (empty)
     for (int i = 0; i < MAX_ACTIVE; i++) {
         w_idx[i] = -1;
         b_idx[i] = -1;
@@ -44,13 +48,12 @@ void evaluate_fen(NNUE* model, const char* fen) {
     strncpy(fen_copy, fen, 256);
     
     char* token = strtok(fen_copy, " ");
-    int sq = 56;
+    int sq = 56; // Start at a8 (Index 56)
+    
     for (int i = 0; token[i] != '\0'; i++) {
         char c = token[i];
         if (c == '/') sq -= 16;
         else if (isdigit(c)) sq += (c - '0');
-        else if (c == 'K') wk_sq = sq++;
-        else if (c == 'k') bk_sq = sq++;
         else {
             int p_type = char_to_piece(c);
             if (p_type != -1) {
@@ -64,13 +67,16 @@ void evaluate_fen(NNUE* model, const char* fen) {
     token = strtok(NULL, " ");
     stm = (token && token[0] == 'b') ? 1 : 0;
 
-    // 2. Map to HalfKP Indices
+    // 2. Map to 768 Indices
     for (int i = 0; i < num_pieces && i < MAX_ACTIVE; i++) {
         int p = pieces[i];
         int s = squares[i];
         
-        w_idx[i] = (wk_sq * 641) + (p * 64) + s;
-        b_idx[i] = (flip_sq(bk_sq) * 641) + (flip_piece(p) * 64) + flip_sq(s);
+        // White's Perspective
+        w_idx[i] = (p * 64) + s;
+        
+        // Black's Perspective (Flip the board visually and swap piece colors)
+        b_idx[i] = (flip_piece(p) * 64) + flip_sq(s);
     }
 
     // 3. Setup GPU Tensors (Batch size = 1)
@@ -91,17 +97,20 @@ void evaluate_fen(NNUE* model, const char* fen) {
     float raw_logit;
     tensor_download_data(out, &raw_logit);
 
-    // Standard Sigmoid for Probability
-    float win_prob = 1.0f / (1.0f + expf(-raw_logit));
+    float stm_win_prob = raw_logit;
+    if (stm_win_prob < 0.001f) stm_win_prob = 0.001f;
+    if (stm_win_prob > 0.999f) stm_win_prob = 0.999f;
 
-    // Multiply by 410 to convert the logit into Centipawns
-    float centipawns = raw_logit * 410.0f;
+    float centipawns = -400.0f * logf((1.0f / stm_win_prob) - 1.0f);
+    if (stm == 1) {
+        centipawns = -centipawns; 
+    }
 
+    // 5. Output
     printf("\nFEN: %s\n", fen);
     printf("Side to move: %s\n", stm == 1 ? "Black" : "White");
-    printf("Network Logit:     %.4f\n", raw_logit);
-    printf("Centipawn Eval:    %.2f (%.2f Pawns)\n", centipawns, centipawns / 100.0f);
-    printf("Win Probability:   %.4f\n", win_prob);
+    printf("STM Win Prob:     %.2f%%\n", stm_win_prob * 100.0f);
+    printf("Centipawn Eval:   %.2f (%.2f Pawns)\n", centipawns, centipawns / 100.0f);
 
     // 6. Cleanup Graph and Tensors
     free_graph(out);
@@ -114,7 +123,8 @@ int main(void) {
     init_framework();
     
     printf("Loading model...\n");
-    NNUE* model = load_nnue("halfkp_model_float.nnue", DEVICE_GPU);
+    // Make sure to load the float checkpoint, not the quantized inference one!
+    NNUE* model = load_nnue("768_model_float.nnue", DEVICE_GPU); 
     if (!model) {
         fprintf(stderr, "Failed to load model.\n");
         return 1;
@@ -122,7 +132,7 @@ int main(void) {
 
     const char* start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     const char* white_winning = "4k3/Q7/4K3/8/8/8/8/8 w - - 0 1";
-    const char* black_winning = "4k3/8/8/8/8/4k3/q7/4K3 w - - 0 1";
+    const char* black_winning = "4k3/8/8/8/8/4k3/q7/4K3 b - - 0 1";
 
     const char* test_1 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
     const char* test_2 = "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";

@@ -134,7 +134,7 @@ def generate_data_multicore(engine_path, fen_list, num_cores):
 if __name__ == '__main__':
     multiprocessing.set_start_method("fork")
     my_engine_path = "/home/cszit/stockfish/stockfish-ubuntu-x86-64-avx2"
-    fen_file_path = "filtered_fens.txt"
+    fen_file_path = "data/filtered_fens.txt"
     
     print(f"Loading FENs from {fen_file_path}...")
     

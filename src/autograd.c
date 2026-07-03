@@ -186,7 +186,7 @@ void backward_blended_loss(Tensor* t) {
         fprintf(stderr, "Error: tensor must be on the gpu.\n");
         return;
     } else {
-        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 1.0);
+        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 1.0f);
     }
 }
 

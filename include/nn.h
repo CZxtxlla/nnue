@@ -21,44 +21,31 @@ LinearLayer* create_linear_layer(int in_features, int out_features, DeviceType d
 Tensor* linear_forward(LinearLayer* layer, Tensor* input); // pass the input tensor through linear layer
 void free_linear_layer(LinearLayer* layer); // free the memory allocated for the linear layer and its tensors
 
-// ----- NNUE HalfKP architecture ------
+// ----- NNUE architecture ------
 
 typedef struct {
-    LinearLayer* feature_transformer; // massive sparse layer 41024 -> 256
+    LinearLayer* feature_transformer; // sparse layer 768 -> 128
     LinearLayer** hidden_layers; // dense layers
     int num_hidden_layers;
     DeviceType dev;
 } NNUE;
 
-// in features 41024, accumulator size 256, hidden dims {512, 21, 32, 1}
+// in features 768, accumulator size 128, hidden dims {256, 32, 1}
 NNUE* create_nnue(int in_features, int accumulator_size, int* hidden_dims, int num_hidden_layers);
 
-// input tesnros contain the active feature indices
+// input tensors contain the active feature indices
 Tensor* nnue_forward(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move);
+Tensor* nnue_forward_nonsparse(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move);
 
 Tensor** nnue_get_parameters(NNUE* model, int* out_num_parameters);
 void free_nnue(NNUE* model);
 int save_nnue(NNUE* model, const char* location);
 NNUE* load_nnue(char* location, DeviceType device);
 
-#define FEATURE_SIZE 41024 
-#define L1_SIZE 256
+#define FEATURE_SIZE 768 
+#define L1_SIZE 128
 
-typedef struct {
-    int16_t feature_weights[FEATURE_SIZE][L1_SIZE];
-    int16_t feature_bias[L1_SIZE];
-    
-    int16_t l1_weights[512][32];
-    int16_t l1_bias[32];
-    
-    int16_t l2_weights[32][32];
-    int16_t l2_bias[32];
-    
-    int16_t output_weight[32][1];
-    int16_t output_bias[1];
-} Quantized_NNUE;
 
-int save_quantized_nnue(NNUE* model, const char* location);
 
 #ifdef __cplusplus
 }
