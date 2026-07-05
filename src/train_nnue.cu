@@ -139,7 +139,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
         float epoch_total_loss = 0.0f;
         int epoch_total_batches = 0;
 
-        // --- Loop through every file chunk for this epoch ---
+        // loop through dataset files
         for (int f = 0; f < num_files; f++) {
             int file_idx = file_indices[f];
             NnueDataset* dataset = load_nnue_dataset(filepaths[file_idx]);
@@ -192,7 +192,6 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
 
                 Tensor* predictions = nnue_forward(model, batch_w, batch_b, batch_stm);
-                //Tensor* loss = tensor_blended_loss_forward(predictions, batch_score, batch_score, 1.0f);
                 Tensor* loss = tensor_mse(predictions, batch_score);
 
                 epoch_total_loss += tensor_scalar_value(loss);
@@ -203,12 +202,12 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 free_graph(loss);
             }
             
-            // Add to the total batch count and safely close the file chunk
+            // Add to the total batch count and close the file chunk
             epoch_total_batches += num_batches;
             free_nnue_dataset(dataset);
         }
         
-        // Print the average loss across ALL files for this epoch
+        // average loss
         if (epoch_total_batches > 0) {
             printf("[%s] Epoch %d/%d | Avg Loss: %.6f\n", label, epoch + 1, epochs, epoch_total_loss / epoch_total_batches);
         } else {
@@ -227,7 +226,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
 int main(void) {
     init_framework();
     
-    // Define an array of your dataset chunk paths
+    // dataset files
     const char* datasets[] = {
         "data_handling/training_data_part_0.bin",
         "data_handling/training_data_part_1.bin",
@@ -242,15 +241,12 @@ int main(void) {
         "data_handling/training_data_part_10.bin"
     };
     
-    // Calculate how many files are in the array
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
-    
-    // Pass the array and the count to the training function
+
     NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, num_datasets);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_model_float.nnue");
-        // export_nnue_for_inference(trained_model, "engine_eval.nnue"); // Run if you added the export func!
+        save_nnue(trained_model, "768_model_float_9_18.nnue");
         free_nnue(trained_model);
     }
     

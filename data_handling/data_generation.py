@@ -67,7 +67,7 @@ def process_fen_chunk(engine_path, chunk_fens, worker_id):
                 print(f"Worker {worker_id} Progress: {i} / {total_in_chunk} ({percent_done:.1f}%)", flush=True)
 
             board = chess.Board(fen)
-            info = engine.analyse(board, chess.engine.Limit(depth=8))
+            info = engine.analyse(board, chess.engine.Limit(depth=9))
             
             # Eval
             score = info["score"].white()
@@ -114,7 +114,7 @@ def generate_data_multicore(engine_path, fen_list, num_cores):
 
     print(f"Starting {num_cores} workers. Total FENs: {len(fen_list)}...")
 
-    generated_files = []
+    #generated_files = []
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_cores) as executor:
         futures = []
@@ -124,11 +124,12 @@ def generate_data_multicore(engine_path, fen_list, num_cores):
             
         # Wait for all cores to finish and collect their filenames
         for future in concurrent.futures.as_completed(futures):
-            generated_files.append(future.result())
+            #generated_files.append(future.result())
+            future.result()
 
-    final_dataset_name = "training_data_final.bin"
-    concatenate_bin_files(generated_files, final_dataset_name)
-    print(f"Finished! Data written to: {final_dataset_name}")
+    #final_dataset_name = "training_data_final.bin"
+    #concatenate_bin_files(generated_files, final_dataset_name)
+    #print(f"Finished! Data written to: {final_dataset_name}")
 
 
 if __name__ == '__main__':

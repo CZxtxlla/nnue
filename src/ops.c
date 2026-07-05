@@ -223,7 +223,7 @@ Tensor* tensor_clipped_relu(Tensor* a) {
         fprintf(stderr, "Error: tensors must be on the gpu.\n");
         return NULL;
     } else if (a->device == DEVICE_GPU) {
-        relu_gpu_forward(a, out);
+        clipped_relu_gpu_forward(a, out);
     }
 
     if (out->requires_grad) {

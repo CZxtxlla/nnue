@@ -124,7 +124,7 @@ int main(void) {
     
     printf("Loading model...\n");
     // Make sure to load the float checkpoint, not the quantized inference one!
-    NNUE* model = load_nnue("768_model_float.nnue", DEVICE_GPU); 
+    NNUE* model = load_nnue("768_model_float_9_18.nnue", DEVICE_GPU); 
     if (!model) {
         fprintf(stderr, "Failed to load model.\n");
         return 1;
