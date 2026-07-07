@@ -41,6 +41,7 @@ Tensor** nnue_get_parameters(NNUE* model, int* out_num_parameters);
 void free_nnue(NNUE* model);
 int save_nnue(NNUE* model, const char* location);
 NNUE* load_nnue(char* location, DeviceType device);
+int save_nnue_quantized(NNUE* model, const char* location);
 
 #define FEATURE_SIZE 768 
 #define L1_SIZE 128

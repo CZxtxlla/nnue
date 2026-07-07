@@ -296,3 +296,71 @@ NNUE* load_nnue(char* location, DeviceType device) {
     fclose(file);
     return model;
 }
+
+// quantized
+int save_nnue_quantized(NNUE* model, const char* location) {
+    if (model == NULL || location == NULL) {
+        return 0; // failure
+    } 
+    FILE* file = fopen(location, "wb");
+    if (file == NULL) {
+        fprintf(stderr, "Error: could not open file %s.\n", location);
+        return 0;
+    }
+
+    uint32_t magic = NNUE_MAGIC_NUMBER;
+    fwrite(&magic, sizeof(uint32_t), 1, file); // write the identifier
+
+    fwrite(&(model->num_hidden_layers), sizeof(int), 1, file); // write the number of hidden layers
+
+    // Helper macro to save linear layer
+    #define SAVE_LAYER(layer) do { \
+        int in_feat = layer->weight->shape[0]; \
+        int out_feat = layer->weight->shape[1]; \
+        fwrite(&in_feat, sizeof(int), 1, file); \
+        fwrite(&out_feat, sizeof(int), 1, file); \
+        float* w_cpu = (float*)malloc(layer->weight->size * sizeof(float)); \
+        float* b_cpu = (float*)malloc(layer->bias->size * sizeof(float)); \
+        tensor_download_data(layer->weight, w_cpu); \
+        tensor_download_data(layer->bias, b_cpu); \
+        \
+        int16_t* w_quantized = (int16_t*)malloc(layer->weight->size * sizeof(int16_t)); \
+        int16_t* b_quantized = (int16_t*)malloc(layer->bias->size * sizeof(int16_t)); \
+        \
+        for (size_t j = 0; j < layer->weight->size; j++) { \
+            float scaled_w = roundf(w_cpu[j] * 256.0f); \
+            if (scaled_w > INT16_MAX) scaled_w = INT16_MAX; \
+            if (scaled_w < INT16_MIN) scaled_w = INT16_MIN; \
+            w_quantized[j] = (int16_t)scaled_w; \
+        } \
+        \
+        /* Scale and round biases */ \
+        for (size_t j = 0; j < layer->bias->size; j++) { \
+            float scaled_w = roundf(b_cpu[j] * 256.0f); \
+            if (scaled_w > INT16_MAX) scaled_w = INT16_MAX; \
+            if (scaled_w < INT16_MIN) scaled_w = INT16_MIN; \
+            b_quantized[j] = (int16_t)scaled_w; \
+        } \
+        \
+        fwrite(w_quantized, sizeof(int16_t), layer->weight->size, file); \
+        fwrite(b_quantized, sizeof(int16_t), layer->bias->size, file); \
+        \
+        free(w_cpu); \
+        free(b_cpu); \
+        free(w_quantized); \
+        free(b_quantized); \
+    } while(0)
+
+    // 3. Save the sparse feature transformer
+    SAVE_LAYER(model->feature_transformer);
+
+    // 4. Save the dense hidden layers
+    for (int i = 0; i < model->num_hidden_layers; i++) {
+        SAVE_LAYER(model->hidden_layers[i]);
+    }
+
+    #undef SAVE_LAYER
+
+    fclose(file);
+    return 1; // success
+}

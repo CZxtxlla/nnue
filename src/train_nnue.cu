@@ -246,7 +246,8 @@ int main(void) {
     NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, num_datasets);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_model_float_9_18.nnue");
+        //save_nnue(trained_model, "768_model_float_9_18.nnue");
+        save_nnue_quantized(trained_model, "768_model_quant_9_18.nnue");
         free_nnue(trained_model);
     }
     
