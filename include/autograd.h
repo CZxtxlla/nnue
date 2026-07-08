@@ -28,20 +28,14 @@ void backward_gpu_matmul(Tensor* t, Tensor* a, Tensor* b);
 void backward_relu(Tensor* t);
 void backward_gpu_relu(Tensor* t, Tensor* a);
 
-void backward_clipped_relu(Tensor* t);
-void backward_gpu_clipped_relu(Tensor* t, Tensor* a);
+void backward_clipped_leaky_relu(Tensor* t);
+void backward_gpu_clipped_leaky_relu(Tensor* t, Tensor* a);
 
 void backward_mse(Tensor* t);
 void backward_gpu_mse(Tensor* t, Tensor* pred, Tensor* target);
 
-void backward_cross_entropy(Tensor* t);
-void backward_gpu_cross_entropy(Tensor* t, Tensor* pred, Tensor* target);
-
 void backward_sparse_linear(Tensor* t);
 void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tensor* bias);
-
-void backward_blended_loss(Tensor* t);
-void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
 
 void backward_perspective_concat(Tensor* t);
 void backward_gpu_perspective_concat(Tensor* t, Tensor* w_acc, Tensor* b_acc, Tensor* stm);

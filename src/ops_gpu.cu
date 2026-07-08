@@ -52,7 +52,7 @@ __global__ void relu_kernel(float* a, float* out, int size) {
     }
 }
 
-__global__ void clipped_relu_kernel(float* a, float* out, int size) {
+__global__ void clipped_leaky_relu_kernel(float* a, float* out, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         float val = a[i];
@@ -66,39 +66,6 @@ __global__ void mse_forward_kernel(float* pred, float* target, float* out, int s
         float diff = pred[i] - target[i];
 
         atomicAdd(&out[0], (diff * diff) / size);
-    }
-}
-
-__global__ void cross_entropy_forward_kernel(float* pred, float* target, float* out, int batch_size, int num_classes) {
-    int b = blockIdx.x * blockDim.x + threadIdx.x; // index in batch
-
-    if (b < batch_size) {
-        int offset = b * num_classes;
-
-        float max_val = pred[offset];
-        for (int c = 1; c < num_classes; c++) {
-            if (pred[offset + c] > max_val) {
-                max_val = pred[offset + c];
-            }
-        }
-
-        float exp_sum = 0.0f;
-        for (int c = 0; c < num_classes; c++) {
-            float e = expf(pred[offset + c] - max_val);
-            pred[offset + c] = e;
-            exp_sum += e;
-        }
-
-        float loss = 0.0f;
-        for (int c = 0; c < num_classes; c++) {
-            float prob = pred[offset + c] / exp_sum;
-            pred[offset + c] = prob;
-            if (target[offset + c] == 1.0f) {
-                loss -= logf(prob + 1e-7f);
-            }
-        }
-
-        atomicAdd(&out[0], loss / batch_size);
     }
 }
 
@@ -125,23 +92,6 @@ __global__ void forward_sparse_linear_kernel(const int* d_inputs, const float* d
 
     // write to dense output tensor
     d_out[b * hidden_dim + h] = acc;
-}
-
-__global__ void forward_blended_loss_kernel(const float* d_pred, const float* d_teacher_probs, const float* d_outcomes, float* d_out, float lambda, int batch_size) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (i >= batch_size) return;
-
-    float p_pred = chess_sigmoid(d_pred[i]);
-    float p_teach = d_teacher_probs[i];
-    float z = d_outcomes[i];
-
-    float teacher_term = p_pred - p_teach;
-    float outcome_term = p_pred - z;
-
-    float loss_val = lambda * teacher_term * teacher_term + ((1.0f - lambda) * outcome_term * outcome_term); // loss function
-
-    atomicAdd(&d_out[0], loss_val / batch_size);
 }
 
 __global__ void forward_perspective_concat_kernel(const float* w_acc, const float* b_acc, const int* stm, float* out, int batch_size, int half_dim) {
@@ -263,13 +213,13 @@ cleanup:
     exit(EXIT_FAILURE);
 }
 
-void clipped_relu_gpu_forward(Tensor* a, Tensor* out) {
-    // helper to call the relu gpu kernel
+void clipped_leaky_relu_gpu_forward(Tensor* a, Tensor* out) {
+    // helper to call the clipped leaky relu gpu kernel
 
     int threads = 256;
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
-    clipped_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
+    clipped_leaky_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;
@@ -293,25 +243,6 @@ cleanup:
     exit(EXIT_FAILURE);
 }
 
-void cross_entropy_gpu_forward(Tensor* pred, Tensor* target, Tensor* out) {
-    cudaMemset(out->gpu_data, 0, sizeof(float));
-
-    int batch_size = pred->shape[0];
-    int num_classes = pred->shape[1];
-
-    int threads = 256;
-    dim3 dimBlock(threads, 1, 1);
-    dim3 dimGrid((batch_size + threads - 1)/threads, 1, 1);
-
-    cross_entropy_forward_kernel<<<dimGrid, dimBlock>>>(pred->gpu_data, target->gpu_data, out->gpu_data, batch_size, num_classes);
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
-
-    return;
-cleanup:
-    exit(EXIT_FAILURE);
-
-}
-
 void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Tensor* out) {
     if (!inputs->is_int_tensor || weights->is_int_tensor || bias->is_int_tensor) {
         fprintf(stderr, "Error: invalid tensor types.\n");
@@ -329,20 +260,6 @@ void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Te
 
     forward_sparse_linear_kernel<<<dimGrid, dimBlock>>>(inputs->device_int_data, weights->gpu_data, bias->gpu_data, out->gpu_data, batch_size, active_count, hidden_dim);
 
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
-
-    return;
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda, Tensor* out) {
-    int batch_size = pred->shape[0];
-    int threads = 256;
-    int blocks = (batch_size + threads - 1) / threads;
-
-    forward_blended_loss_kernel<<<blocks, threads>>>(pred->gpu_data, teacher_probs->gpu_data, outcomes->gpu_data, out->gpu_data, lambda, batch_size);
-    
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;

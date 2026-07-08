@@ -23,20 +23,14 @@ void matmul_gpu_forward(Tensor* a, Tensor* b, Tensor* out);
 Tensor* tensor_relu(Tensor* a);
 void relu_gpu_forward(Tensor* a, Tensor* out);
 
-Tensor* tensor_clipped_relu(Tensor* a);
-void clipped_relu_gpu_forward(Tensor* a, Tensor* out);
+Tensor* tensor_clipped_leaky_relu(Tensor* a);
+void clipped_leaky_relu_gpu_forward(Tensor* a, Tensor* out);
 
 Tensor* tensor_mse(Tensor* pred, Tensor* target);
 void mse_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);
 
-Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target);
-void cross_entropy_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);
-
 Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bias);
 void sparse_linear_gpu_forward(Tensor* inputs, Tensor* weights, Tensor* bias, Tensor* out);
-
-Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda);
-void blended_loss_gpu_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda, Tensor* out);
 
 Tensor* tensor_perspective_concat_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm); // stm = side to move
 void perspective_concat_gpu_forward(Tensor* white_acc, Tensor* black_acc, Tensor* stm, Tensor* out);

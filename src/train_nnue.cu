@@ -82,7 +82,7 @@ NnueDataset* load_nnue_dataset(const char* filepath) {
 
 NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, int num_files) {
     int epochs = 20; 
-    int batch_size = 4096; 
+    int batch_size = 16384; 
 
     float initial_lr = 0.001f;
     int drop_every_n_epochs = 5; 

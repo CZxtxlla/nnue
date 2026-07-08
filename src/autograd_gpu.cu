@@ -78,7 +78,7 @@ __global__ void backward_relu_kernel(float* t_grad, float* a_grad, float* a_data
     }
 }
 
-__global__ void backward_clipped_relu_kernel(float* t_grad, float* a_grad, float* a_data, int size) {
+__global__ void backward_clipped_leaky_relu_kernel(float* t_grad, float* a_grad, float* a_data, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         if (a_grad != NULL) {
@@ -101,13 +101,6 @@ __global__ void mse_backward_kernel(float* pred, float* target, float* pred_grad
         if (target_grad != NULL) {
             atomicAdd(&target_grad[i], -scale * diff * out_grad[0]);
         }
-    }
-}
-
-__global__ void cross_entropy_backward_kernel(float* pred, float* target, float* pred_grad, float* out_grad, int size, int batch_size) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
-        pred_grad[i] += (pred[i] - target[i]) * (out_grad[0] / batch_size);
     }
 }
 
@@ -139,20 +132,6 @@ __global__ void backward_sparse_weight_kernel(const int* d_inputs, const float* 
 
         atomicAdd(&d_weight_grad[feature_idx * hidden_dim + h], grad_out);
     }
-}
-
-__global__ void backward_blended_loss_kernel(const float* d_pred, const float* d_teacher_probs, const float* d_outcomes, const float* d_lossgrad, float* d_predgrad, float lambda, int batch_size) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= batch_size) return;
-
-    float p_pred = chess_sigmoid(d_pred[i]);
-    float p_teach = d_teacher_probs[i];
-    float z = d_outcomes[i];
-
-    float dL_dp = 2.0f * (lambda * (p_pred - p_teach) + (1.0f - lambda) * (p_pred - z)); 
-    float dp_dy = p_pred * (1.0f - p_pred); // * (1.0f / SIGMOID_K)
-
-    d_predgrad[i] = (d_lossgrad[0] / batch_size) * dL_dp * dp_dy;
 }
 
 __global__ void backward_perspective_concat_kernel(const float* out_grad, const int* stm, float* w_grad, float* b_grad, int batch_size, int half_dim) {
@@ -284,13 +263,13 @@ cleanup:
     exit(EXIT_FAILURE);
 }
 
-void backward_gpu_clipped_relu(Tensor* t, Tensor* a) {
+void backward_gpu_clipped_leaky_relu(Tensor* t, Tensor* a) {
     if (a->requires_grad) {
 
         int threads = 256;
         dim3 dimBlock(threads, 1, 1);
         dim3 dimGrid((t->size + threads - 1)/threads, 1, 1);
-        backward_clipped_relu_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, a->gpu_data, t->size);
+        backward_clipped_leaky_relu_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, a->gpu_data, t->size);
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
 
@@ -306,19 +285,6 @@ void backward_gpu_mse(Tensor* t, Tensor* pred, Tensor* target) {
     dim3 dimGrid((pred->size + threads - 1)/threads, 1, 1);
 
     mse_backward_kernel<<<dimGrid, dimBlock>>>(pred->gpu_data, target->gpu_data, pred->gpu_grad, target->gpu_grad, t->gpu_grad, pred->size);
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
-    return;
-
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-void backward_gpu_cross_entropy(Tensor* t, Tensor* pred, Tensor* target) {
-    int threads = 256;
-    dim3 dimBlock(threads, 1, 1);
-    dim3 dimGrid((pred->size + threads - 1)/threads, 1, 1);
-
-    cross_entropy_backward_kernel<<<dimGrid, dimBlock>>>(pred->gpu_data, target->gpu_data, pred->gpu_grad, t->gpu_grad, pred->size, pred->shape[0]);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     return;
 
@@ -348,20 +314,6 @@ void backward_gpu_sparse_linear(Tensor* t, Tensor* inputs, Tensor* weights, Tens
         backward_sparse_weight_kernel<<<dimGrid, dimBlock>>>(inputs->device_int_data, t->gpu_grad, weights->gpu_grad, batch_size, active_count, hidden_dim);
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
-    return;
-
-cleanup:
-    exit(EXIT_FAILURE);
-}
-
-void backward_gpu_blended_loss(Tensor* t, Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda){
-    int batch_size = pred->shape[0];
-
-    int threads = 256;
-    int blocks = (batch_size + threads - 1) / threads;
-
-    backward_blended_loss_kernel<<<blocks, threads>>>(pred->gpu_data, teacher_probs->gpu_data, outcomes->gpu_data, t->gpu_grad, pred->gpu_grad, lambda, batch_size);
-    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     return;
 
 cleanup:

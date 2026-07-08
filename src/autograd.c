@@ -100,10 +100,10 @@ void backward_relu(Tensor* t) {
     }
 }
 
-void backward_clipped_relu(Tensor* t) {
+void backward_clipped_leaky_relu(Tensor* t) {
     // Takes tensor t which is the result of a clipped relu operation and computes gradients for its parents
 
-    if (t->op != OP_CLIPPED_RELU || t->num_parents != 1) {
+    if (t->op != OP_CLIPPED_LEAKY_RELU || t->num_parents != 1) {
         fprintf(stderr, "Error: backward_clipped_relu called on tensor that is not the result of a clipped relu operation.\n");
         return;
     }
@@ -114,7 +114,7 @@ void backward_clipped_relu(Tensor* t) {
         fprintf(stderr, "Error: tensor must be on the gpu.\n");
         return;
     } else if (t->device == DEVICE_GPU) {
-        backward_gpu_clipped_relu(t, a);
+        backward_gpu_clipped_leaky_relu(t, a);
     }
 }
 
@@ -136,24 +136,6 @@ void backward_mse(Tensor* t) {
     }
 }
 
-void backward_cross_entropy(Tensor* t) {
-    // takes tensor t result of cross entropy loss and computes parents gradients
-    if (t->op != OP_CROSS_ENTROPY || t->num_parents != 2) {
-        fprintf(stderr, "Error: backward_cross_entropy called on tensor that is not the result of a cross entropy operation.\n");
-        return;
-    }
-
-    Tensor* pred = t->parents[0];
-    Tensor* target = t->parents[1];
-
-    if (t->device == DEVICE_CPU) {
-        fprintf(stderr, "Error: tensor must be on the gpu.\n");
-        return;
-    } else {
-        backward_gpu_cross_entropy(t, pred, target);
-    }
-}
-
 void backward_sparse_linear(Tensor* t) {
     if (t->op != OP_SPARSE_LINEAR || t->num_parents != 3) {
         fprintf(stderr, "Error: backward_sparse_linear called on tensor that is not the result of a sparse linear operation.\n");
@@ -169,24 +151,6 @@ void backward_sparse_linear(Tensor* t) {
         return;
     } else {
         backward_gpu_sparse_linear(t, inputs, weights, bias);
-    }
-}
-
-void backward_blended_loss(Tensor* t) {
-    if (t->op != OP_BLENDED_LOSS || t->num_parents != 3) {
-        fprintf(stderr, "Error: backward_blended_loss called on tensor that is not the result of a blended loss operation.\n");
-        return;
-    }
-
-    Tensor* pred = t->parents[0];
-    Tensor* teacher_probs = t->parents[1];
-    Tensor* outcomes = t->parents[2];
-
-    if (t->device == DEVICE_CPU) {
-        fprintf(stderr, "Error: tensor must be on the gpu.\n");
-        return;
-    } else {
-        backward_gpu_blended_loss(t, pred, teacher_probs, outcomes, 1.0f);
     }
 }
 
@@ -328,16 +292,12 @@ void backward(Tensor* t) {
             backward_add_bias(current);
         } else if (current->op == OP_RELU) {
             backward_relu(current);
-        } else if (current->op == OP_CLIPPED_RELU) {
-            backward_clipped_relu(current);
+        } else if (current->op == OP_CLIPPED_LEAKY_RELU) {
+            backward_clipped_leaky_relu(current);
         } else if (current->op == OP_MSE) {
             backward_mse(current);
-        } else if (current->op == OP_CROSS_ENTROPY) {
-            backward_cross_entropy(current);
         } else if (current->op == OP_SPARSE_LINEAR) {
             backward_sparse_linear(current);
-        } else if (current->op == OP_BLENDED_LOSS) {
-            backward_blended_loss(current);
         } else if (current->op == OP_PERSPECTIVE_CONCAT) {
             backward_perspective_concat(current);
         }

@@ -215,7 +215,7 @@ Tensor* tensor_relu(Tensor* a) {
 }
 
 
-Tensor* tensor_clipped_relu(Tensor* a) {
+Tensor* tensor_clipped_leaky_relu(Tensor* a) {
     
     Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad, 0);
 
@@ -223,20 +223,20 @@ Tensor* tensor_clipped_relu(Tensor* a) {
         fprintf(stderr, "Error: tensors must be on the gpu.\n");
         return NULL;
     } else if (a->device == DEVICE_GPU) {
-        clipped_relu_gpu_forward(a, out);
+        clipped_leaky_relu_gpu_forward(a, out);
     }
 
     if (out->requires_grad) {
         out->parents = (Tensor**)malloc(sizeof(Tensor));
         if (out->parents == NULL) {
-            fprintf(stderr, "Error: Failed to allocate memory for list of parents in relu tensor.\n");
+            fprintf(stderr, "Error: Failed to allocate memory for list of parents in clipped leaky relu tensor.\n");
             free_tensor(out);
             return NULL;
         }
         
         out->parents[0] = a;
         out->num_parents = 1;
-        out->op = OP_CLIPPED_RELU;   
+        out->op = OP_CLIPPED_LEAKY_RELU;   
     }
 
     return out;
@@ -256,24 +256,6 @@ Tensor* tensor_mse(Tensor* pred, Tensor* target) {
         return NULL;
     } else if (pred->device == DEVICE_GPU) {
         mse_gpu_forward(pred, target, out);
-    }
-    return out;
-}
-
-Tensor* tensor_cross_entropy(Tensor* pred, Tensor* target) {
-    int shape[] = {1};
-    Tensor* out = create_tensor(shape, 1, pred->device, true, 0);
-    out->op = OP_CROSS_ENTROPY;
-    out->num_parents = 2;
-    out->parents = (Tensor**)malloc(2 * sizeof(Tensor*));
-    out->parents[0] = pred;
-    out->parents[1] = target;
-
-    if (pred->device == DEVICE_CPU) {
-        fprintf(stderr, "Error: tensors must be on the gpu.\n");
-        return NULL;
-    } else if (pred->device == DEVICE_GPU) {
-        cross_entropy_gpu_forward(pred, target, out);
     }
     return out;
 }
@@ -303,27 +285,6 @@ Tensor* tensor_sparse_linear_forward(Tensor* inputs, Tensor* weights, Tensor* bi
         return NULL;
     } else if (inputs->device == DEVICE_GPU) {
         sparse_linear_gpu_forward(inputs, weights, bias, out);
-    }
-    return out;
-}
-
-Tensor* tensor_blended_loss_forward(Tensor* pred, Tensor* teacher_probs, Tensor* outcomes, float lambda) {
-    int batch_size = pred->shape[0];
-    int shape[] = {batch_size, 1};
-
-    Tensor* out = create_tensor(shape, 2, pred->device, true, 0);
-    out->op = OP_BLENDED_LOSS;
-    out->num_parents = 3;
-    out->parents = (Tensor**)malloc(3 * sizeof(Tensor*));
-    out->parents[0] = pred;
-    out->parents[1] = teacher_probs;
-    out->parents[2] = outcomes;
-
-    if (pred->device == DEVICE_CPU) {
-        fprintf(stderr, "Error: tensors must be on the gpu.\n");
-        return NULL;
-    } else if (pred->device == DEVICE_GPU) {
-        blended_loss_gpu_forward(pred, teacher_probs, outcomes, lambda, out);
     }
     return out;
 }
