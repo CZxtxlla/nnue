@@ -160,7 +160,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                     
                     float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
                     float eval_target = 1.0f / (1.0f + expf(-s->eval / 400.0f));
-                    float absolute_score = (lambda * wdl_target) + ((1.0f - lambda) * eval_target);
+                    float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
                     
                     h_stm[i] = s->stm;
 

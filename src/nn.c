@@ -129,30 +129,6 @@ Tensor* nnue_forward(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Te
     return current_input;
 }
 
-Tensor* nnue_forward_nonsparse(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move) {
-
-    Tensor* white_acc = linear_forward(model->feature_transformer, white_inputs);
-    Tensor* black_acc = linear_forward(model->feature_transformer, black_inputs);
-
-    Tensor* white_clipped = tensor_clipped_leaky_relu(white_acc);
-    Tensor* black_clipped = tensor_clipped_leaky_relu(black_acc);
-
-    Tensor* current_input = tensor_perspective_concat_forward(white_clipped, black_clipped, side_to_move);
-
-    // hidden layers
-    for (int i = 0; i < model->num_hidden_layers; i++) {
-        Tensor* linear_out = linear_forward(model->hidden_layers[i], current_input);
-
-        if (i < model->num_hidden_layers - 1) {
-            current_input = tensor_clipped_leaky_relu(linear_out);
-        } else {
-            current_input = linear_out;
-        }
-    }
-
-    return current_input;
-}
-
 Tensor** nnue_get_parameters(NNUE* model, int* out_num_parameters) {
     *out_num_parameters = 2 + (model->num_hidden_layers * 2);
 
@@ -351,10 +327,8 @@ int save_nnue_quantized(NNUE* model, const char* location) {
         free(b_quantized); \
     } while(0)
 
-    // 3. Save the sparse feature transformer
     SAVE_LAYER(model->feature_transformer);
 
-    // 4. Save the dense hidden layers
     for (int i = 0; i < model->num_hidden_layers; i++) {
         SAVE_LAYER(model->hidden_layers[i]);
     }

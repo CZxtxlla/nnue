@@ -35,7 +35,6 @@ NNUE* create_nnue(int in_features, int accumulator_size, int* hidden_dims, int n
 
 // input tensors contain the active feature indices
 Tensor* nnue_forward(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move);
-Tensor* nnue_forward_nonsparse(NNUE* model, Tensor* white_inputs, Tensor* black_inputs, Tensor* side_to_move);
 
 Tensor** nnue_get_parameters(NNUE* model, int* out_num_parameters);
 void free_nnue(NNUE* model);
