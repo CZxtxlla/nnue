@@ -19,7 +19,7 @@ extern "C" void cleanup_framework();
 
 #define MAX_ACTIVE 32
 #define IN_FEATURES 768
-#define ACCUMULATOR_SIZE 128
+#define ACCUMULATOR_SIZE 1024
 
 static int flip_sq(int sq) {
     return sq ^ 56;
@@ -87,8 +87,8 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     int drop_every_n_epochs = 5; 
     float drop_factor = 0.5f; 
 
-    int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 32, 1}; 
-    NNUE* model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 2);
+    int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 1}; 
+    NNUE* model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 1);
     
     int num_params;
     Tensor** params = nnue_get_parameters(model, &num_params);
@@ -314,18 +314,18 @@ int main(int argc, char* argv[]) {
         "data_handling/training_data_part_6.bin",
         "data_handling/training_data_part_7.bin",
         "data_handling/training_data_part_8.bin",
-        "data_handling/training_data_part_9.bin",
-        "data_handling/training_data_part_10.bin"
+        "data_handling/training_data_part_9.bin"
+        //"data_handling/training_data_part_10.bin"
     };
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    //const char* validation_dataset = "data_handling/training_data_part_10.bin";
-    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, NULL, num_datasets, lambda_val, lr_val, k_val);
+    const char* validation_dataset = "data_handling/training_data_part_10.bin";
+    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset, num_datasets, lambda_val, lr_val, k_val);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_float_9_18_50.nnue");
-        save_nnue_quantized(trained_model, "768_quant_9_18_50.nnue");
+        save_nnue(trained_model, "768_float_9_18_50_1024.nnue");
+        save_nnue_quantized(trained_model, "768_quant_9_18_50_1024.nnue");
         free_nnue(trained_model);
     }
     
