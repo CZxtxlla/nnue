@@ -80,21 +80,19 @@ NnueDataset* load_nnue_dataset(const char* filepath) {
     return data;
 }
 
-NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, int num_files) {
+NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, const char* val_filepath, int num_files, float lambda, float lr, float K) {
     int epochs = 20; 
     int batch_size = 16384; 
 
-    float initial_lr = 0.001f;
     int drop_every_n_epochs = 5; 
     float drop_factor = 0.5f; 
-    float lambda = 0.5f; 
 
     int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 32, 1}; 
     NNUE* model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 2);
     
     int num_params;
     Tensor** params = nnue_get_parameters(model, &num_params);
-    Adam* optimizer = adam_create(params, num_params, initial_lr);
+    Adam* optimizer = adam_create(params, num_params, lr);
 
     int batch_shape_active[] = {batch_size, MAX_ACTIVE};
     int batch_shape_scalar[] = {batch_size, 1};
@@ -112,6 +110,11 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
 
     printf("\n[%s] Starting training across %d dataset files...\n", label, num_files);
 
+    NnueDataset* val_dataset = load_nnue_dataset(val_filepath);
+    if (!val_dataset) {
+        printf("Warning: Could not load validation set %s. Validation will be skipped.\n", val_filepath);
+    }
+
     // Array to hold the shuffled file indices
     int* file_indices = (int*)malloc(num_files * sizeof(int));
     for(int i = 0; i < num_files; i++) {
@@ -128,7 +131,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
             printf("\n>>> [Scheduler] Learning Rate reduced to: %f <<<\n\n", optimizer->lr);
         }
 
-        // Shuffle the order of the 11 dataset chunks
+        // Shuffle the order of the dataset chunks
         for (int i = num_files - 1; i > 0; i--) {
             int j = rand() % (i + 1);
             int temp = file_indices[i];
@@ -138,6 +141,8 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
         
         float epoch_total_loss = 0.0f;
         int epoch_total_batches = 0;
+        float val_total_loss = 0.0f;
+        int val_total_batches = 0;
 
         // loop through dataset files
         for (int f = 0; f < num_files; f++) {
@@ -145,7 +150,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
             NnueDataset* dataset = load_nnue_dataset(filepaths[file_idx]);
             
             if (!dataset) {
-                printf("Warning: Could not load %s. Skipping...\n", filepaths[f]);
+                printf("Warning: Could not load %s. Skipping...\n", filepaths[file_idx]);
                 continue;
             }
 
@@ -159,7 +164,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                     Sample* s = &batch_samples[i];
                     
                     float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
-                    float eval_target = 1.0f / (1.0f + expf(-s->eval / 400.0f));
+                    float eval_target = 1.0f / (1.0f + expf(-s->eval / K));
                     float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
                     
                     h_stm[i] = s->stm;
@@ -206,13 +211,72 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
             epoch_total_batches += num_batches;
             free_nnue_dataset(dataset);
         }
+
+        if (val_dataset) {
+            int num_val_batches = val_dataset->num_samples / batch_size;
+
+            for (int b = 0; b < num_val_batches; b++) {
+                Sample* batch_samples = (Sample*)((char*)val_dataset->mmap_ptr + (b * batch_size * sizeof(Sample)));
+
+                for (int i = 0; i < batch_size; i++) {
+                    Sample* s = &batch_samples[i];
+
+                    float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
+                    float eval_target = 1.0f / (1.0f + expf(-s->eval / K));
+                    float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
+
+                    h_stm[i] = s->stm;
+
+                    if (s->stm == 1) {
+                        h_score[i] = 1.0f - absolute_score;
+                    } else {
+                        h_score[i] = absolute_score;
+                    }
+
+                    for (int feat = 0; feat < MAX_ACTIVE; feat++) {
+                        int feature_val = (s->features[feat] == 65535) ? -1 : (int)s->features[feat];
+                        h_w[i * MAX_ACTIVE + feat] = feature_val;
+
+                        if (feature_val < 0) {
+                            h_b[i * MAX_ACTIVE + feat] = -1;
+                        } else {
+                            int piece_idx = feature_val / 64;
+                            int square_idx = feature_val % 64;
+                            h_b[i * MAX_ACTIVE + feat] = (flip_piece(piece_idx) * 64) + flip_sq(square_idx);
+                        }
+                    }
+                }
+
+                cudaMemcpy(batch_w->device_int_data, h_w, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
+                cudaMemcpy(batch_b->device_int_data, h_b, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
+                cudaMemcpy(batch_stm->device_int_data, h_stm, batch_size * sizeof(int), cudaMemcpyHostToDevice);
+                cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
+
+                Tensor* predictions = nnue_forward(model, batch_w, batch_b, batch_stm);
+                Tensor* loss = tensor_mse(predictions, batch_score);
+
+                val_total_loss += tensor_scalar_value(loss);
+                free_graph(loss);
+            }
+
+            val_total_batches = num_val_batches;
+        }
         
-        // average loss
-        if (epoch_total_batches > 0) {
-            printf("[%s] Epoch %d/%d | Avg Loss: %.6f\n", label, epoch + 1, epochs, epoch_total_loss / epoch_total_batches);
+        if (epoch_total_batches > 0 && val_total_batches > 0) {
+            float train_loss_avg = epoch_total_loss / epoch_total_batches;
+            float val_loss_avg = val_total_loss / val_total_batches;
+
+            printf("[%s] Epoch %d/%d | Train Loss: %.6f | Val Loss: %.6f\n",
+                   label, epoch + 1, epochs, train_loss_avg, val_loss_avg);
+        } else if (epoch_total_batches > 0) {
+            printf("[%s] Epoch %d/%d | Train Loss: %.6f\n", label, epoch + 1, epochs, epoch_total_loss / epoch_total_batches);
         } else {
             printf("[%s] Epoch %d/%d | No data processed.\n", label, epoch + 1, epochs);
         }
+    }
+
+    if (val_dataset) {
+        free_nnue_dataset(val_dataset);
     }
 
     free(h_w); free(h_b); free(h_stm); free(h_score);
@@ -223,7 +287,19 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     return model;
 }
 
-int main(void) {
+
+int main(int argc, char* argv[]) {
+
+    //safety check
+    if (argc < 4) {
+        printf("Usage: %s <lambda> <lr> <K>\n", argv[0]);
+        return 1;
+    }
+
+    float lambda_val = atof(argv[1]);
+    float lr_val = atof(argv[2]);
+    float k_val = atof(argv[3]);
+
     init_framework();
     
     // dataset files
@@ -237,17 +313,18 @@ int main(void) {
         "data_handling/training_data_part_6.bin",
         "data_handling/training_data_part_7.bin",
         "data_handling/training_data_part_8.bin",
-        "data_handling/training_data_part_9.bin",
-        "data_handling/training_data_part_10.bin"
+        "data_handling/training_data_part_9.bin"
+        //"data_handling/training_data_part_10.bin"
     };
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, num_datasets);
+    const char* validation_dataset = "data_handling/training_data_part_10.bin";
+    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset, num_datasets, lambda_val, lr_val, k_val);
     
     if (trained_model) {
-        //save_nnue(trained_model, "768_model_float_9_18.nnue");
-        save_nnue_quantized(trained_model, "768_model_quant_9_18.nnue");
+        save_nnue(trained_model, "768_float_9_18_optimized.nnue");
+        save_nnue_quantized(trained_model, "768_quant_9_18_optimized.nnue");
         free_nnue(trained_model);
     }
     
