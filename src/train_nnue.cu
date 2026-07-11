@@ -125,11 +125,12 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     srand((unsigned int)time(NULL));
 
     for (int epoch = 0; epoch < epochs; epoch++) {
-        
+        /*
         if (epoch > 0 && epoch % drop_every_n_epochs == 0) {
             optimizer->lr *= drop_factor;
             printf("\n>>> [Scheduler] Learning Rate reduced to: %f <<<\n\n", optimizer->lr);
         }
+        */
 
         // Shuffle the order of the dataset chunks
         for (int i = num_files - 1; i > 0; i--) {
@@ -313,18 +314,18 @@ int main(int argc, char* argv[]) {
         "data_handling/training_data_part_6.bin",
         "data_handling/training_data_part_7.bin",
         "data_handling/training_data_part_8.bin",
-        "data_handling/training_data_part_9.bin"
-        //"data_handling/training_data_part_10.bin"
+        "data_handling/training_data_part_9.bin",
+        "data_handling/training_data_part_10.bin"
     };
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    const char* validation_dataset = "data_handling/training_data_part_10.bin";
-    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset, num_datasets, lambda_val, lr_val, k_val);
+    //const char* validation_dataset = "data_handling/training_data_part_10.bin";
+    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, NULL, num_datasets, lambda_val, lr_val, k_val);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_float_9_18_optimized.nnue");
-        save_nnue_quantized(trained_model, "768_quant_9_18_optimized.nnue");
+        save_nnue(trained_model, "768_float_9_18_50.nnue");
+        save_nnue_quantized(trained_model, "768_quant_9_18_50.nnue");
         free_nnue(trained_model);
     }
     
