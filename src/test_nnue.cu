@@ -13,7 +13,7 @@ extern "C" void cleanup_framework();
 
 #define MAX_ACTIVE 32
 
-// --- FEN Parsing Helpers (Updated for 768) ---
+// --- FEN Parsing Helpers ---
 
 // 0-5 for White, 6-11 for Black (Matches python-chess: P=0, K=5, p=6, k=11)
 int char_to_piece(char c) {
@@ -43,7 +43,7 @@ void evaluate_fen(NNUE* model, const char* fen) {
         b_idx[i] = -1;
     }
 
-    // 1. Parse the FEN string
+    // Parse the FEN string
     char fen_copy[256];
     strncpy(fen_copy, fen, 256);
     
@@ -67,7 +67,7 @@ void evaluate_fen(NNUE* model, const char* fen) {
     token = strtok(NULL, " ");
     stm = (token && token[0] == 'b') ? 1 : 0;
 
-    // 2. Map to 768 Indices
+    // Map to 768 Indices
     for (int i = 0; i < num_pieces && i < MAX_ACTIVE; i++) {
         int p = pieces[i];
         int s = squares[i];
@@ -79,7 +79,7 @@ void evaluate_fen(NNUE* model, const char* fen) {
         b_idx[i] = (flip_piece(p) * 64) + flip_sq(s);
     }
 
-    // 3. Setup GPU Tensors (Batch size = 1)
+    // Setup GPU Tensors (Batch size = 1)
     int active_shape[] = {1, MAX_ACTIVE};
     int scalar_shape[] = {1, 1};
 
@@ -106,13 +106,13 @@ void evaluate_fen(NNUE* model, const char* fen) {
         centipawns = -centipawns; 
     }
 
-    // 5. Output
+    // Output
     printf("\nFEN: %s\n", fen);
     printf("Side to move: %s\n", stm == 1 ? "Black" : "White");
     printf("STM Win Prob:     %.2f%%\n", stm_win_prob * 100.0f);
     printf("Centipawn Eval:   %.2f (%.2f Pawns)\n", centipawns, centipawns / 100.0f);
 
-    // 6. Cleanup Graph and Tensors
+    // Cleanup Graph and Tensors
     free_graph(out);
     free_tensor(t_w);
     free_tensor(t_b);
@@ -123,8 +123,8 @@ int main(void) {
     init_framework();
     
     printf("Loading model...\n");
-    // Make sure to load the float checkpoint, not the quantized inference one!
-    NNUE* model = load_nnue("768_model_float_9_18.nnue", DEVICE_GPU); 
+    // Make sure to load the float model, not the quantized inference one
+    NNUE* model = load_nnue("768_float_9_18_50_1024.nnue", DEVICE_GPU); 
     if (!model) {
         fprintf(stderr, "Failed to load model.\n");
         return 1;

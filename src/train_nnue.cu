@@ -81,10 +81,10 @@ NnueDataset* load_nnue_dataset(const char* filepath) {
 }
 
 NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, const char* val_filepath, int num_files, float lambda, float lr, float K) {
-    int epochs = 20; 
+    int epochs = 50; 
     int batch_size = 16384; 
 
-    int drop_every_n_epochs = 5; 
+    int drop_every_n_epochs = 15; 
     float drop_factor = 0.5f; 
 
     int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 1}; 
@@ -125,12 +125,12 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     srand((unsigned int)time(NULL));
 
     for (int epoch = 0; epoch < epochs; epoch++) {
-        /*
+        
         if (epoch > 0 && epoch % drop_every_n_epochs == 0) {
             optimizer->lr *= drop_factor;
             printf("\n>>> [Scheduler] Learning Rate reduced to: %f <<<\n\n", optimizer->lr);
         }
-        */
+        
 
         // Shuffle the order of the dataset chunks
         for (int i = num_files - 1; i > 0; i--) {
@@ -225,7 +225,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                     float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
                     float eval_target = 1.0f / (1.0f + expf(-s->eval / K));
                     float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
-
+                    
                     h_stm[i] = s->stm;
 
                     if (s->stm == 1) {

@@ -7,8 +7,8 @@ fn main() -> std::io::Result<()> {
     let mut reader = CompressedTrainingDataEntryReader::new(in_file).unwrap();
     
     let records_per_file = 2_000_000;
-    // 11 files, 10 for training one for validation
-    let target_files = 11; 
+    // 21 files, 20 for training one for validation
+    let target_files = 21; 
     let max_total_records = records_per_file * target_files;
 
     let mut total_records = 0;
@@ -31,11 +31,14 @@ fn main() -> std::io::Result<()> {
         let mut win: u16 = 0;
         let mut draw: u16 = 0;
         let mut loss: u16 = 0;
-        match entry.result {
-            2 => win = 1000,
-            1 => draw = 1000,
-            _ => loss = 1000,
+        if entry.result == 1 {
+            win = 1000;
+        } else if entry.result == 0 {
+            draw = 1000;
+        } else {
+            loss = 1000;
         }
+
         writer.write_all(&win.to_le_bytes())?;
         writer.write_all(&draw.to_le_bytes())?;
         writer.write_all(&loss.to_le_bytes())?;
