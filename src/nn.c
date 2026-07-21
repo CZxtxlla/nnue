@@ -249,6 +249,7 @@ NNUE* load_nnue(char* location, DeviceType device) {
         if (fread(&in_feat, sizeof(int), 1, file) != 1 || fread(&out_feat, sizeof(int), 1, file) != 1) { \
             fprintf(stderr, "Error: missing layer dimensions.\n"); \
             fclose(file); \
+            free_nnue(model); \
             return NULL; \
         } \
         target_ptr = create_linear_layer(in_feat, out_feat, DEVICE_CPU); \

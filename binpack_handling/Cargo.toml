@@ -1,8 +1,0 @@
-[package]
-name = "binpack_handling"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-sfbinpack = "0.6.4"
-zstd = "0.13.3"

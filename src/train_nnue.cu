@@ -43,7 +43,7 @@ void free_nnue_dataset(NnueDataset* data) {
     }
 }
 
-// 1. Exact match to the Python binary output (74 bytes)
+// (74 bytes)
 #pragma pack(push, 1)
 typedef struct {
     int16_t eval; 
@@ -56,7 +56,7 @@ typedef struct {
 } Sample;
 #pragma pack(pop)
 
-// Updated Dataset loader
+// Dataset loader
 NnueDataset* load_nnue_dataset(const char* filepath) {
     int fd = open(filepath, O_RDONLY);
     if (fd == -1) return NULL;
@@ -80,15 +80,21 @@ NnueDataset* load_nnue_dataset(const char* filepath) {
     return data;
 }
 
-NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, const char* val_filepath, int num_files, float lambda, float lr, float K) {
-    int epochs = 50; 
+NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, const char* val_filepath, int num_files, float lambda, float lr, float K, NNUE* existing_model) {
+    int epochs = 20; 
     int batch_size = 16384; 
 
-    int drop_every_n_epochs = 15; 
+    int drop_every_n_epochs = 5; 
     float drop_factor = 0.5f; 
 
+    NNUE* model;
     int hidden_dims[] = {ACCUMULATOR_SIZE * 2, 1}; 
-    NNUE* model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 1);
+    if (existing_model == NULL) {
+        // create model for training if one wasn't passed
+        model = create_nnue(IN_FEATURES, ACCUMULATOR_SIZE, hidden_dims, 1);
+    } else {
+        model = existing_model;
+    }
     
     int num_params;
     Tensor** params = nnue_get_parameters(model, &num_params);
@@ -97,7 +103,7 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     int batch_shape_active[] = {batch_size, MAX_ACTIVE};
     int batch_shape_scalar[] = {batch_size, 1};
 
-    // Allocate GPU Tensors and Host Buffers ONCE
+    // Allocate GPU Tensors and Host Buffers
     Tensor* batch_w = create_tensor(batch_shape_active, 2, DEVICE_GPU, false, 1);
     Tensor* batch_b = create_tensor(batch_shape_active, 2, DEVICE_GPU, false, 1);
     Tensor* batch_stm = create_tensor(batch_shape_scalar, 2, DEVICE_GPU, false, 1);
@@ -164,18 +170,24 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 for (int i = 0; i < batch_size; i++) {
                     Sample* s = &batch_samples[i];
                     
-                    float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
-                    float eval_target = 1.0f / (1.0f + expf(-s->eval / K));
+                    float wdl_target = (float)s->win + (float)s->draw / 2.0f; //(s->win + (s->draw / 2.0f)) / 1000.0f;
+                    float eval_target = 1.0f / (1.0f + expf(-(float)s->eval / K));
                     float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
                     
                     h_stm[i] = s->stm;
 
+                    /*
+                    uncomment if training on stockfish data since the eval is absolute, 
+                    self play data the eval is already based on stm
                     if (s->stm == 1) { 
                         // If it is black's turn, flip the probability
                         h_score[i] = 1.0f - absolute_score; 
                     } else {
                         h_score[i] = absolute_score;
                     }
+                    */
+
+                    h_score[i] = absolute_score;
                     
                     for(int feat = 0; feat < MAX_ACTIVE; feat++) {
                         int feature_val = (s->features[feat] == 65535) ? -1 : (int)s->features[feat];
@@ -222,17 +234,21 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 for (int i = 0; i < batch_size; i++) {
                     Sample* s = &batch_samples[i];
 
-                    float wdl_target = (s->win + (s->draw / 2.0f)) / 1000.0f;
-                    float eval_target = 1.0f / (1.0f + expf(-s->eval / K));
+                    float wdl_target =  (float)s->win + (float)s->draw / 2.0f; // (s->win + (s->draw / 2.0f)) / 1000.0f;
+                    float eval_target = 1.0f / (1.0f + expf(-(float)s->eval / K));
                     float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
                     
                     h_stm[i] = s->stm;
 
+                    /*
                     if (s->stm == 1) {
                         h_score[i] = 1.0f - absolute_score;
                     } else {
                         h_score[i] = absolute_score;
                     }
+                    */
+
+                    h_score[i] = absolute_score;
 
                     for (int feat = 0; feat < MAX_ACTIVE; feat++) {
                         int feature_val = (s->features[feat] == 65535) ? -1 : (int)s->features[feat];
@@ -304,6 +320,7 @@ int main(int argc, char* argv[]) {
     init_framework();
     
     // dataset files
+    /*
     const char* datasets[] = {
         "data_handling/training_data_part_0.bin",
         "data_handling/training_data_part_1.bin",
@@ -317,15 +334,32 @@ int main(int argc, char* argv[]) {
         "data_handling/training_data_part_9.bin"
         //"data_handling/training_data_part_10.bin"
     };
+    */
+
+    const char* datasets[] = {
+        "selfplay_data/training_data_thread_0.bin",
+        "selfplay_data/training_data_thread_1.bin",
+        "selfplay_data/training_data_thread_2.bin",
+        "selfplay_data/training_data_thread_3.bin",
+        "selfplay_data/training_data_thread_4.bin",
+        "selfplay_data/training_data_thread_5.bin",
+        "selfplay_data/training_data_thread_6.bin",
+        // "selfplay_data/training_data_thread_7.bin",
+    };
+
+
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    const char* validation_dataset = "data_handling/training_data_part_10.bin";
-    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset, num_datasets, lambda_val, lr_val, k_val);
+    const char* validation_dataset = "selfplay_data/training_data_thread_7.bin";
+
+    NNUE* existing_model = load_nnue("768_float_9_18_50_1024.nnue", DEVICE_GPU); // already trained model
+
+    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset, num_datasets, lambda_val, lr_val, k_val, existing_model);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_float_9_18_50_1024.nnue");
-        save_nnue_quantized(trained_model, "768_quant_9_18_50_1024.nnue");
+        save_nnue(trained_model, "768_float_9_18_50_1024_v2.nnue"); // v2 for finetuned
+        save_nnue_quantized(trained_model, "768_quant_9_18_50_1024_v2.nnue");
         free_nnue(trained_model);
     }
     
