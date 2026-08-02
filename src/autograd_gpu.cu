@@ -78,12 +78,12 @@ __global__ void backward_relu_kernel(float* t_grad, float* a_grad, float* a_data
     }
 }
 
-__global__ void backward_clipped_leaky_relu_kernel(float* t_grad, float* a_grad, float* a_data, int size) {
+__global__ void backward_clipped_relu_kernel(float* t_grad, float* a_grad, float* a_data, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         if (a_grad != NULL) {
             float val = a_data[i];
-            float grad = (val > 0.0f && val < CLIPPED_RELU_MAX) ? t_grad[i] : ((val <= 0.0f) ? (0.01f * t_grad[i]) : 0.0f);
+            float grad = (val > 0.0f && val < CLIPPED_RELU_MAX) ? t_grad[i] : 0.0f;
             atomicAdd(&a_grad[i], grad);
         }
     }
@@ -263,13 +263,13 @@ cleanup:
     exit(EXIT_FAILURE);
 }
 
-void backward_gpu_clipped_leaky_relu(Tensor* t, Tensor* a) {
+void backward_gpu_clipped_relu(Tensor* t, Tensor* a) {
     if (a->requires_grad) {
 
         int threads = 256;
         dim3 dimBlock(threads, 1, 1);
         dim3 dimGrid((t->size + threads - 1)/threads, 1, 1);
-        backward_clipped_leaky_relu_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, a->gpu_data, t->size);
+        backward_clipped_relu_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, a->gpu_data, t->size);
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
 

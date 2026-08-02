@@ -23,8 +23,11 @@ void matmul_gpu_forward(Tensor* a, Tensor* b, Tensor* out);
 Tensor* tensor_relu(Tensor* a);
 void relu_gpu_forward(Tensor* a, Tensor* out);
 
-Tensor* tensor_clipped_leaky_relu(Tensor* a);
-void clipped_leaky_relu_gpu_forward(Tensor* a, Tensor* out);
+Tensor* sigmoid(Tensor* a);
+void sigmoid_gpu_forward(Tensor* a, Tensor* out);
+
+Tensor* tensor_clipped_relu(Tensor* a);
+void clipped_relu_gpu_forward(Tensor* a, Tensor* out);
 
 Tensor* tensor_mse(Tensor* pred, Tensor* target);
 void mse_gpu_forward(Tensor* pred, Tensor* target, Tensor* out);

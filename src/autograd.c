@@ -100,10 +100,10 @@ void backward_relu(Tensor* t) {
     }
 }
 
-void backward_clipped_leaky_relu(Tensor* t) {
+void backward_clipped_relu(Tensor* t) {
     // Takes tensor t which is the result of a clipped relu operation and computes gradients for its parents
 
-    if (t->op != OP_CLIPPED_LEAKY_RELU || t->num_parents != 1) {
+    if (t->op != OP_CLIPPED_RELU || t->num_parents != 1) {
         fprintf(stderr, "Error: backward_clipped_relu called on tensor that is not the result of a clipped relu operation.\n");
         return;
     }
@@ -114,7 +114,7 @@ void backward_clipped_leaky_relu(Tensor* t) {
         fprintf(stderr, "Error: tensor must be on the gpu.\n");
         return;
     } else if (t->device == DEVICE_GPU) {
-        backward_gpu_clipped_leaky_relu(t, a);
+        backward_gpu_clipped_relu(t, a);
     }
 }
 
@@ -292,8 +292,8 @@ void backward(Tensor* t) {
             backward_add_bias(current);
         } else if (current->op == OP_RELU) {
             backward_relu(current);
-        } else if (current->op == OP_CLIPPED_LEAKY_RELU) {
-            backward_clipped_leaky_relu(current);
+        } else if (current->op == OP_CLIPPED_RELU) {
+            backward_clipped_relu(current);
         } else if (current->op == OP_MSE) {
             backward_mse(current);
         } else if (current->op == OP_SPARSE_LINEAR) {

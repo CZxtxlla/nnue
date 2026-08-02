@@ -20,7 +20,7 @@ typedef enum {
     OP_MUL,
     OP_MATMUL,
     OP_RELU,
-    OP_CLIPPED_LEAKY_RELU,
+    OP_CLIPPED_RELU,
     OP_ADDBIAS,
     OP_MSE,
     OP_SPARSE_LINEAR,

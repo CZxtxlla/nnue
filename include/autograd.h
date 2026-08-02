@@ -28,8 +28,8 @@ void backward_gpu_matmul(Tensor* t, Tensor* a, Tensor* b);
 void backward_relu(Tensor* t);
 void backward_gpu_relu(Tensor* t, Tensor* a);
 
-void backward_clipped_leaky_relu(Tensor* t);
-void backward_gpu_clipped_leaky_relu(Tensor* t, Tensor* a);
+void backward_clipped_relu(Tensor* t);
+void backward_gpu_clipped_relu(Tensor* t, Tensor* a);
 
 void backward_mse(Tensor* t);
 void backward_gpu_mse(Tensor* t, Tensor* pred, Tensor* target);

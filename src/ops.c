@@ -215,7 +215,7 @@ Tensor* tensor_relu(Tensor* a) {
 }
 
 
-Tensor* tensor_clipped_leaky_relu(Tensor* a) {
+Tensor* tensor_clipped_relu(Tensor* a) {
     
     Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad, 0);
 
@@ -223,7 +223,7 @@ Tensor* tensor_clipped_leaky_relu(Tensor* a) {
         fprintf(stderr, "Error: tensors must be on the gpu.\n");
         return NULL;
     } else if (a->device == DEVICE_GPU) {
-        clipped_leaky_relu_gpu_forward(a, out);
+        clipped_relu_gpu_forward(a, out);
     }
 
     if (out->requires_grad) {
@@ -236,7 +236,7 @@ Tensor* tensor_clipped_leaky_relu(Tensor* a) {
         
         out->parents[0] = a;
         out->num_parents = 1;
-        out->op = OP_CLIPPED_LEAKY_RELU;   
+        out->op = OP_CLIPPED_RELU;   
     }
 
     return out;

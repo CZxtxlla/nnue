@@ -52,11 +52,11 @@ __global__ void relu_kernel(float* a, float* out, int size) {
     }
 }
 
-__global__ void clipped_leaky_relu_kernel(float* a, float* out, int size) {
+__global__ void clipped_relu_kernel(float* a, float* out, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         float val = a[i];
-        out[i] = val > CLIPPED_RELU_MAX ? CLIPPED_RELU_MAX : (val > 0.0f ? val : 0.01f * val);
+        out[i] = val > CLIPPED_RELU_MAX ? CLIPPED_RELU_MAX : (val > 0.0f ? val : 0.0f);
     }
 }
 
@@ -213,13 +213,13 @@ cleanup:
     exit(EXIT_FAILURE);
 }
 
-void clipped_leaky_relu_gpu_forward(Tensor* a, Tensor* out) {
-    // helper to call the clipped leaky relu gpu kernel
+void clipped_relu_gpu_forward(Tensor* a, Tensor* out) {
+    // helper to call the clipped relu gpu kernel
 
     int threads = 256;
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
-    clipped_leaky_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
+    clipped_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;
