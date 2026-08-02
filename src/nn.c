@@ -274,6 +274,9 @@ NNUE* load_nnue(char* location, DeviceType device) {
     return model;
 }
 
+#define QA 255.0 // input layer quantization
+#define QB 64.0 // hidden layer quantization
+
 // quantized
 int save_nnue_quantized(NNUE* model, const char* location) {
     if (model == NULL || location == NULL) {
@@ -291,7 +294,7 @@ int save_nnue_quantized(NNUE* model, const char* location) {
     fwrite(&(model->num_hidden_layers), sizeof(int), 1, file); // write the number of hidden layers
 
     // Helper macro to save linear layer
-    #define SAVE_LAYER(layer) do { \
+    #define SAVE_LAYER(layer, quant_weight, quant_bias) do { \
         int in_feat = layer->weight->shape[0]; \
         int out_feat = layer->weight->shape[1]; \
         fwrite(&in_feat, sizeof(int), 1, file); \
@@ -301,26 +304,26 @@ int save_nnue_quantized(NNUE* model, const char* location) {
         tensor_download_data(layer->weight, w_cpu); \
         tensor_download_data(layer->bias, b_cpu); \
         \
-        int16_t* w_quantized = (int16_t*)malloc(layer->weight->size * sizeof(int16_t)); \
-        int16_t* b_quantized = (int16_t*)malloc(layer->bias->size * sizeof(int16_t)); \
+        int32_t* w_quantized = (int32_t*)malloc(layer->weight->size * sizeof(int32_t)); \
+        int32_t* b_quantized = (int32_t*)malloc(layer->bias->size * sizeof(int32_t)); \
         \
         for (size_t j = 0; j < layer->weight->size; j++) { \
-            float scaled_w = roundf(w_cpu[j] * 256.0f); \
-            if (scaled_w > INT16_MAX) scaled_w = INT16_MAX; \
-            if (scaled_w < INT16_MIN) scaled_w = INT16_MIN; \
+            float scaled_w = roundf(w_cpu[j] * quant_weight); \
+            if (scaled_w > INT32_MAX) scaled_w = INT32_MAX; \
+            if (scaled_w < INT32_MIN) scaled_w = INT32_MIN; \
             w_quantized[j] = (int16_t)scaled_w; \
         } \
         \
         /* Scale and round biases */ \
         for (size_t j = 0; j < layer->bias->size; j++) { \
-            float scaled_w = roundf(b_cpu[j] * 256.0f); \
-            if (scaled_w > INT16_MAX) scaled_w = INT16_MAX; \
-            if (scaled_w < INT16_MIN) scaled_w = INT16_MIN; \
-            b_quantized[j] = (int16_t)scaled_w; \
+            float scaled_b = roundf(b_cpu[j] * quant_bias); \
+            if (scaled_b > INT32_MAX) scaled_b = INT32_MAX; \
+            if (scaled_b < INT32_MIN) scaled_b = INT32_MIN; \
+            b_quantized[j] = (int16_t)scaled_b; \
         } \
         \
-        fwrite(w_quantized, sizeof(int16_t), layer->weight->size, file); \
-        fwrite(b_quantized, sizeof(int16_t), layer->bias->size, file); \
+        fwrite(w_quantized, sizeof(int32_t), layer->weight->size, file); \
+        fwrite(b_quantized, sizeof(int32_t), layer->bias->size, file); \
         \
         free(w_cpu); \
         free(b_cpu); \
@@ -328,10 +331,10 @@ int save_nnue_quantized(NNUE* model, const char* location) {
         free(b_quantized); \
     } while(0)
 
-    SAVE_LAYER(model->feature_transformer);
+    SAVE_LAYER(model->feature_transformer, QA, QA);
 
     for (int i = 0; i < model->num_hidden_layers; i++) {
-        SAVE_LAYER(model->hidden_layers[i]);
+        SAVE_LAYER(model->hidden_layers[i], QB, QA * QB);
     }
 
     #undef SAVE_LAYER

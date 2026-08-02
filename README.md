@@ -178,3 +178,13 @@ $$
 $$
 
 and this is exactly the gradient of the new loss being computed, except instead of having to compute two MSE losses we only have to compute one. Additionally this allows the reuse of the MSE forward and backward from my previous project.
+
+### Quantization
+
+Quantization is extremely important for speed, and the network can never be actually useful in the chess engine without it. Floats are just so slow, and so the goal is to properly scale all floats so that they may be represented as integers, obviously with some precision loss, but to the great benefit of inference speed.
+
+To save the network, we use two quantization factors, `QA = 255` and `QB = 64`. We multiply the accumulators weights and biases by QA, and for the hidden layer we multiply the weight by QB and the bias by QA * QB. (Note I didn't make up these values, although I don't quite know the specific reason these are chosen, I just pulled them off the chess programming wiki). 
+
+For why this works, take the following explanation courtesy of [this](https://www.dogeystamp.com/chess6/#appendix-crelu-quantization) nice article.
+
+With this solution, the only adjustment to the inference code is to divide the final output by `QA * QB` at the end, which is 16320.
