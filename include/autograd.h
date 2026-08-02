@@ -31,6 +31,9 @@ void backward_gpu_relu(Tensor* t, Tensor* a);
 void backward_clipped_relu(Tensor* t);
 void backward_gpu_clipped_relu(Tensor* t, Tensor* a);
 
+void backward_sigmoid(Tensor* t);
+void backward_gpu_sigmoid(Tensor* t, Tensor* a);
+
 void backward_mse(Tensor* t);
 void backward_gpu_mse(Tensor* t, Tensor* pred, Tensor* target);
 

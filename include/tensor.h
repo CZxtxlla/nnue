@@ -21,6 +21,7 @@ typedef enum {
     OP_MATMUL,
     OP_RELU,
     OP_CLIPPED_RELU,
+    OP_SIGMOID,
     OP_ADDBIAS,
     OP_MSE,
     OP_SPARSE_LINEAR,

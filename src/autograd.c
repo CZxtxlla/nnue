@@ -118,6 +118,24 @@ void backward_clipped_relu(Tensor* t) {
     }
 }
 
+void backward_sigmoid(Tensor* t) {
+    // Takes tensor t which is the result of a sigmoid operation and computes gradients for its parents
+
+    if (t->op != OP_SIGMOID || t->num_parents != 1) {
+        fprintf(stderr, "Error: backward_sigmoid called on tensor that is not the result of a sigmoid operation.\n");
+        return;
+    }
+
+    Tensor* a = t->parents[0];
+
+    if (t->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensor must be on the gpu.\n");
+        return;
+    } else if (t->device == DEVICE_GPU) {
+        backward_gpu_sigmoid(t, a);
+    }
+}
+
 void backward_mse(Tensor* t) {
     // takes tensor t result of mse oper and computes parents gradients
     if (t->op != OP_MSE || t->num_parents != 2) {
@@ -294,6 +312,8 @@ void backward(Tensor* t) {
             backward_relu(current);
         } else if (current->op == OP_CLIPPED_RELU) {
             backward_clipped_relu(current);
+        } else if (current->op == OP_SIGMOID) {
+            backward_sigmoid(current);
         } else if (current->op == OP_MSE) {
             backward_mse(current);
         } else if (current->op == OP_SPARSE_LINEAR) {

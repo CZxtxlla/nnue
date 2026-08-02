@@ -89,6 +89,17 @@ __global__ void backward_clipped_relu_kernel(float* t_grad, float* a_grad, float
     }
 }
 
+__global__ void backward_sigmoid_kernel(float* t_grad, float* a_grad, float* out_data, int size) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        if (a_grad != NULL) {
+            float s = out_data[i];
+            float grad = t_grad[i] * (s * (1.0f - s)) * (1.0f / 400.0f);
+            atomicAdd(&a_grad[i], grad);
+        }
+    }
+}
+
 __global__ void mse_backward_kernel(float* pred, float* target, float* pred_grad, float* target_grad, float* out_grad, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
@@ -270,6 +281,22 @@ void backward_gpu_clipped_relu(Tensor* t, Tensor* a) {
         dim3 dimBlock(threads, 1, 1);
         dim3 dimGrid((t->size + threads - 1)/threads, 1, 1);
         backward_clipped_relu_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, a->gpu_data, t->size);
+        CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+    }
+
+    return;
+
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void backward_gpu_sigmoid(Tensor* t, Tensor* a) {
+    if (a->requires_grad) {
+
+        int threads = 256;
+        dim3 dimBlock(threads, 1, 1);
+        dim3 dimGrid((t->size + threads - 1)/threads, 1, 1);
+        backward_sigmoid_kernel<<<dimGrid, dimBlock>>>(t->gpu_grad, a->gpu_grad, t->gpu_data, t->size);
         CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
     }
 

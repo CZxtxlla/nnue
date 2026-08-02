@@ -60,6 +60,14 @@ __global__ void clipped_relu_kernel(float* a, float* out, int size) {
     }
 }
 
+__global__ void sigmoid_kernel(float* a, float* out, int size, float K) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        // perform sigmoid with K = 400
+        out[i] = 1.0f / (1.0f + expf(-a[i] / K));
+    }
+}
+
 __global__ void mse_forward_kernel(float* pred, float* target, float* out, int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
@@ -220,6 +228,20 @@ void clipped_relu_gpu_forward(Tensor* a, Tensor* out) {
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid((a->size + threads - 1)/threads, 1, 1);
     clipped_relu_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size);
+    CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
+
+    return;
+
+cleanup:
+    exit(EXIT_FAILURE);
+}
+
+void sigmoid_gpu_forward(Tensor* a, Tensor* out) {
+
+    int threads = 256;
+    dim3 dimBlock(threads, 1, 1);
+    dim3 dimGrid((a->size + threads - 1) / threads, 1, 1);
+    sigmoid_kernel<<<dimGrid, dimBlock>>>(a->gpu_data, out->gpu_data, a->size, 400.0);
     CUDA_CHECK_GOTO(cudaGetLastError(), cleanup);
 
     return;

@@ -209,7 +209,8 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 cudaMemcpy(batch_stm->device_int_data, h_stm, batch_size * sizeof(int), cudaMemcpyHostToDevice);
                 cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
 
-                Tensor* predictions = nnue_forward(model, batch_w, batch_b, batch_stm);
+                Tensor* raw_logits = nnue_forward(model, batch_w, batch_b, batch_stm);
+                Tensor* predictions = tensor_sigmoid(raw_logits);
                 Tensor* loss = tensor_mse(predictions, batch_score);
 
                 epoch_total_loss += tensor_scalar_value(loss);
@@ -269,7 +270,8 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 cudaMemcpy(batch_stm->device_int_data, h_stm, batch_size * sizeof(int), cudaMemcpyHostToDevice);
                 cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
 
-                Tensor* predictions = nnue_forward(model, batch_w, batch_b, batch_stm);
+                Tensor* raw_logits = nnue_forward(model, batch_w, batch_b, batch_stm);
+                Tensor* predictions = tensor_sigmoid(raw_logits);
                 Tensor* loss = tensor_mse(predictions, batch_score);
 
                 val_total_loss += tensor_scalar_value(loss);

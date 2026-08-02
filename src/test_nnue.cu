@@ -97,14 +97,8 @@ void evaluate_fen(NNUE* model, const char* fen) {
     float raw_logit;
     tensor_download_data(out, &raw_logit);
 
-    float stm_win_prob = raw_logit;
-    if (stm_win_prob < 0.001f) stm_win_prob = 0.001f;
-    if (stm_win_prob > 0.999f) stm_win_prob = 0.999f;
-
-    float centipawns = -400.0f * logf((1.0f / stm_win_prob) - 1.0f);
-    if (stm == 1) {
-        centipawns = -centipawns; 
-    }
+    float centipawns = raw_logit;
+    float stm_win_prob = 1.0f / (1.0f + expf(-centipawns / 400.0));
 
     // Output
     printf("\nFEN: %s\n", fen);
@@ -124,7 +118,7 @@ int main(void) {
     
     printf("Loading model...\n");
     // Make sure to load the float model, not the quantized inference one
-    NNUE* model = load_nnue("768_float_9_18_50_1024.nnue", DEVICE_GPU); 
+    NNUE* model = load_nnue("768_float_9_18_50_1024_v3.nnue", DEVICE_GPU); 
     if (!model) {
         fprintf(stderr, "Failed to load model.\n");
         return 1;

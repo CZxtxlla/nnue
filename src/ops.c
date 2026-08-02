@@ -229,7 +229,7 @@ Tensor* tensor_clipped_relu(Tensor* a) {
     if (out->requires_grad) {
         out->parents = (Tensor**)malloc(sizeof(Tensor));
         if (out->parents == NULL) {
-            fprintf(stderr, "Error: Failed to allocate memory for list of parents in clipped leaky relu tensor.\n");
+            fprintf(stderr, "Error: Failed to allocate memory for list of parents in clipped relu tensor.\n");
             free_tensor(out);
             return NULL;
         }
@@ -237,6 +237,33 @@ Tensor* tensor_clipped_relu(Tensor* a) {
         out->parents[0] = a;
         out->num_parents = 1;
         out->op = OP_CLIPPED_RELU;   
+    }
+
+    return out;
+}
+
+Tensor* tensor_sigmoid(Tensor* a) {
+    
+    Tensor* out = create_tensor(a->shape, a->ndims, a->device, a->requires_grad, 0);
+
+    if (a->device == DEVICE_CPU) {
+        fprintf(stderr, "Error: tensors must be on the gpu.\n");
+        return NULL;
+    } else if (a->device == DEVICE_GPU) {
+        sigmoid_gpu_forward(a, out);
+    }
+
+    if (out->requires_grad) {
+        out->parents = (Tensor**)malloc(sizeof(Tensor));
+        if (out->parents == NULL) {
+            fprintf(stderr, "Error: Failed to allocate memory for list of parents in sigmoid tensor.\n");
+            free_tensor(out);
+            return NULL;
+        }
+        
+        out->parents[0] = a;
+        out->num_parents = 1;
+        out->op = OP_SIGMOID;   
     }
 
     return out;
