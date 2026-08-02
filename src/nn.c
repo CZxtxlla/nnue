@@ -311,7 +311,7 @@ int save_nnue_quantized(NNUE* model, const char* location) {
             float scaled_w = roundf(w_cpu[j] * quant_weight); \
             if (scaled_w > INT32_MAX) scaled_w = INT32_MAX; \
             if (scaled_w < INT32_MIN) scaled_w = INT32_MIN; \
-            w_quantized[j] = (int16_t)scaled_w; \
+            w_quantized[j] = (int32_t)scaled_w; \
         } \
         \
         /* Scale and round biases */ \
@@ -319,7 +319,7 @@ int save_nnue_quantized(NNUE* model, const char* location) {
             float scaled_b = roundf(b_cpu[j] * quant_bias); \
             if (scaled_b > INT32_MAX) scaled_b = INT32_MAX; \
             if (scaled_b < INT32_MIN) scaled_b = INT32_MIN; \
-            b_quantized[j] = (int16_t)scaled_b; \
+            b_quantized[j] = (int32_t)scaled_b; \
         } \
         \
         fwrite(w_quantized, sizeof(int32_t), layer->weight->size, file); \
