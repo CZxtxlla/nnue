@@ -81,7 +81,7 @@ NnueDataset* load_nnue_dataset(const char* filepath) {
 }
 
 NNUE* run_nnue_training(DeviceType device, const char* label, const char** filepaths, const char* val_filepath, int num_files, float lambda, float lr, float K, NNUE* existing_model) {
-    int epochs = 10; 
+    int epochs = 20; 
     int batch_size = 16384; 
 
     int drop_every_n_epochs = 5; 
@@ -344,22 +344,24 @@ int main(int argc, char* argv[]) {
         "selfplay_data/training_data_thread_3.bin",
         "selfplay_data/training_data_thread_4.bin",
         "selfplay_data/training_data_thread_5.bin",
-        "selfplay_data/training_data_thread_6.bin"
-        //"selfplay_data/training_data_thread_7.bin"
+        "selfplay_data/training_data_thread_6.bin",
+        "selfplay_data/training_data_thread_7.bin",
+        "selfplay_data/training_data_thread_8.bin",
+        //"selfplay_data/training_data_thread_9.bin",
     };
 
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    const char* validation_dataset = "selfplay_data/training_data_thread_7.bin";
+    const char* validation_dataset = "selfplay_data/training_data_thread_9.bin";
 
     NNUE* existing_model = load_nnue("768_float_9_18_50_1024.nnue", DEVICE_GPU); // already trained model
 
-    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset /*validation dataset*/, num_datasets, lambda_val, lr_val, k_val, existing_model);
+    NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset /*validation dataset*/, num_datasets, lambda_val, lr_val, k_val, NULL);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_float_9_18_50_1024_v3.nnue"); // v2 for finetuned, v3 for new quant save
-        save_nnue_quantized(trained_model, "768_quant_9_18_50_1024_v3.nnue");
+        save_nnue(trained_model, "768_float_50_1024_v1.nnue"); // v1 = trained on Mark_11 (hc positional eval)
+        save_nnue_quantized(trained_model, "768_quant_50_1024_v1.nnue");
         free_nnue(trained_model);
     }
     
