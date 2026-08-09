@@ -114,21 +114,26 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     int* h_stm = (int*)malloc(batch_size * sizeof(int));
     float* h_score = (float*)malloc(batch_size * sizeof(float));
 
-    printf("\n[%s] Starting training across %d dataset files...\n", label, num_files);
+    NnueDataset* dataset = load_nnue_dataset(filepaths[0]);
+    if (!dataset) {
+        printf("Error: Could not load dataset %s\n", filepaths[0]);
+        return NULL;
+    }
+
+    int total_samples = dataset->num_samples;
+    printf("\n[%s] Loaded Dataset: %d total positions.\n", label, total_samples);
+
+    int* sample_indices = (int*)malloc(total_samples * sizeof(int));
+    for(int i = 0; i < total_samples; i++) {
+        sample_indices[i] = i;
+    }
 
     NnueDataset* val_dataset = load_nnue_dataset(val_filepath);
     if (!val_dataset) {
-        printf("Warning: Could not load validation set %s. Validation will be skipped.\n", val_filepath);
+        printf("Warning: Could not load validation set %s.\n", val_filepath);
     }
 
-    // Array to hold the shuffled file indices
-    int* file_indices = (int*)malloc(num_files * sizeof(int));
-    for(int i = 0; i < num_files; i++) {
-        file_indices[i] = i;
-    }
-
-    // Seed the random generator for shuffling
-    srand((unsigned int)time(NULL));
+    uint64_t rng_state = (uint64_t)time(NULL) ^ 1804289383ULL;
 
     for (int epoch = 0; epoch < epochs; epoch++) {
         
@@ -136,100 +141,75 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
             optimizer->lr *= drop_factor;
             printf("\n>>> [Scheduler] Learning Rate reduced to: %f <<<\n\n", optimizer->lr);
         }
-        
 
-        // Shuffle the order of the dataset chunks
-        for (int i = num_files - 1; i > 0; i--) {
-            int j = rand() % (i + 1);
-            int temp = file_indices[i];
-            file_indices[i] = file_indices[j];
-            file_indices[j] = temp;
+        // shuffle indices
+        for (int i = total_samples - 1; i > 0; i--) {
+            rng_state ^= rng_state << 13;
+            rng_state ^= rng_state >> 7;
+            rng_state ^= rng_state << 17;
+            
+            int j = rng_state % (i + 1);
+            int temp = sample_indices[i];
+            sample_indices[i] = sample_indices[j];
+            sample_indices[j] = temp;
         }
         
         float epoch_total_loss = 0.0f;
-        int epoch_total_batches = 0;
+        int num_batches = total_samples / batch_size;
+            
+        for (int b = 0; b < num_batches; b++) {
+            
+            for (int i = 0; i < batch_size; i++) {
+                int global_idx = sample_indices[b * batch_size + i];
+                Sample* s = (Sample*)((char*)dataset->mmap_ptr + ((size_t)global_idx * sizeof(Sample)));
+                
+                float wdl_target = (float)s->win + (float)s->draw / 2.0f; //(s->win + (s->draw / 2.0f)) / 1000.0f; uncomment if stockfish data
+                float eval_target = 1.0f / (1.0f + expf(-(float)s->eval / K));
+                float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
+                
+                h_stm[i] = s->stm;
+                h_score[i] = absolute_score;
+                
+                for(int feat = 0; feat < MAX_ACTIVE; feat++) {
+                    int feature_val = (s->features[feat] == 65535) ? -1 : (int)s->features[feat];
+                    
+                    h_w[i * MAX_ACTIVE + feat] = feature_val;
+
+                    if (feature_val < 0) {
+                        h_b[i * MAX_ACTIVE + feat] = -1;
+                    } else {
+                        int piece_idx = feature_val / 64;
+                        int square_idx = feature_val % 64;
+                        h_b[i * MAX_ACTIVE + feat] = (flip_piece(piece_idx) * 64) + flip_sq(square_idx);
+                    }
+                }
+            }
+
+            cudaMemcpy(batch_w->device_int_data, h_w, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(batch_b->device_int_data, h_b, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(batch_stm->device_int_data, h_stm, batch_size * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
+
+            Tensor* raw_logits = nnue_forward(model, batch_w, batch_b, batch_stm);
+            Tensor* predictions = tensor_sigmoid(raw_logits);
+            Tensor* loss = tensor_mse(predictions, batch_score);
+
+            epoch_total_loss += tensor_scalar_value(loss);
+            seed_loss_grad(loss);
+            backward(loss);
+            adam_step(optimizer);
+            adam_zero_grad(optimizer);
+            free_graph(loss);
+        }
+
+        //validation
         float val_total_loss = 0.0f;
         int val_total_batches = 0;
 
-        // loop through dataset files
-        for (int f = 0; f < num_files; f++) {
-            int file_idx = file_indices[f];
-            NnueDataset* dataset = load_nnue_dataset(filepaths[file_idx]);
-            
-            if (!dataset) {
-                printf("Warning: Could not load %s. Skipping...\n", filepaths[file_idx]);
-                continue;
-            }
-
-            int num_batches = dataset->num_samples / batch_size;
-            
-            for (int b = 0; b < num_batches; b++) {
-                
-                Sample* batch_samples = (Sample*)((char*)dataset->mmap_ptr + (b * batch_size * sizeof(Sample)));
-                
-                for (int i = 0; i < batch_size; i++) {
-                    Sample* s = &batch_samples[i];
-                    
-                    float wdl_target = (float)s->win + (float)s->draw / 2.0f; //(s->win + (s->draw / 2.0f)) / 1000.0f; uncomment if stockfish data
-                    float eval_target = 1.0f / (1.0f + expf(-(float)s->eval / K));
-                    float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
-                    
-                    h_stm[i] = s->stm;
-
-                    /*
-                    uncomment if training on stockfish data since the eval is absolute, 
-                    self play data the eval is already based on stm
-                    if (s->stm == 1) { 
-                        // If it is black's turn, flip the probability
-                        h_score[i] = 1.0f - absolute_score; 
-                    } else {
-                        h_score[i] = absolute_score;
-                    }
-                    */
-
-                    h_score[i] = absolute_score;
-                    
-                    for(int feat = 0; feat < MAX_ACTIVE; feat++) {
-                        int feature_val = (s->features[feat] == 65535) ? -1 : (int)s->features[feat];
-                        
-                        h_w[i * MAX_ACTIVE + feat] = feature_val;
-
-                        if (feature_val < 0) {
-                            h_b[i * MAX_ACTIVE + feat] = -1;
-                        } else {
-                            int piece_idx = feature_val / 64;
-                            int square_idx = feature_val % 64;
-                            h_b[i * MAX_ACTIVE + feat] = (flip_piece(piece_idx) * 64) + flip_sq(square_idx);
-                        }
-                    }
-                }
-
-                cudaMemcpy(batch_w->device_int_data, h_w, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
-                cudaMemcpy(batch_b->device_int_data, h_b, batch_size * MAX_ACTIVE * sizeof(int), cudaMemcpyHostToDevice);
-                cudaMemcpy(batch_stm->device_int_data, h_stm, batch_size * sizeof(int), cudaMemcpyHostToDevice);
-                cudaMemcpy(batch_score->gpu_data, h_score, batch_size * sizeof(float), cudaMemcpyHostToDevice);
-
-                Tensor* raw_logits = nnue_forward(model, batch_w, batch_b, batch_stm);
-                Tensor* predictions = tensor_sigmoid(raw_logits);
-                Tensor* loss = tensor_mse(predictions, batch_score);
-
-                epoch_total_loss += tensor_scalar_value(loss);
-                seed_loss_grad(loss);
-                backward(loss);
-                adam_step(optimizer);
-                adam_zero_grad(optimizer);
-                free_graph(loss);
-            }
-            
-            // Add to the total batch count and close the file chunk
-            epoch_total_batches += num_batches;
-            free_nnue_dataset(dataset);
-        }
-
         if (val_dataset) {
-            int num_val_batches = val_dataset->num_samples / batch_size;
+            val_total_batches = val_dataset->num_samples / batch_size;
 
-            for (int b = 0; b < num_val_batches; b++) {
+            for (int b = 0; b < val_total_batches; b++) {
                 Sample* batch_samples = (Sample*)((char*)val_dataset->mmap_ptr + (b * batch_size * sizeof(Sample)));
 
                 for (int i = 0; i < batch_size; i++) {
@@ -240,15 +220,6 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                     float absolute_score = (lambda * eval_target) + ((1.0f - lambda) * wdl_target);
                     
                     h_stm[i] = s->stm;
-
-                    /*
-                    if (s->stm == 1) {
-                        h_score[i] = 1.0f - absolute_score;
-                    } else {
-                        h_score[i] = absolute_score;
-                    }
-                    */
-
                     h_score[i] = absolute_score;
 
                     for (int feat = 0; feat < MAX_ACTIVE; feat++) {
@@ -277,18 +248,16 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
                 val_total_loss += tensor_scalar_value(loss);
                 free_graph(loss);
             }
-
-            val_total_batches = num_val_batches;
         }
         
-        if (epoch_total_batches > 0 && val_total_batches > 0) {
-            float train_loss_avg = epoch_total_loss / epoch_total_batches;
+        if (num_batches > 0 && val_total_batches > 0) {
+            float train_loss_avg = epoch_total_loss / num_batches;
             float val_loss_avg = val_total_loss / val_total_batches;
 
             printf("[%s] Epoch %d/%d | Train Loss: %.6f | Val Loss: %.6f\n",
-                   label, epoch + 1, epochs, train_loss_avg, val_loss_avg);
-        } else if (epoch_total_batches > 0) {
-            printf("[%s] Epoch %d/%d | Train Loss: %.6f\n", label, epoch + 1, epochs, epoch_total_loss / epoch_total_batches);
+                    label, epoch + 1, epochs, train_loss_avg, val_loss_avg);
+        } else if (num_batches > 0) {
+            printf("[%s] Epoch %d/%d | Train Loss: %.6f\n", label, epoch + 1, epochs, epoch_total_loss / num_batches);
         } else {
             printf("[%s] Epoch %d/%d | No data processed.\n", label, epoch + 1, epochs);
         }
@@ -297,11 +266,12 @@ NNUE* run_nnue_training(DeviceType device, const char* label, const char** filep
     if (val_dataset) {
         free_nnue_dataset(val_dataset);
     }
+    free_nnue_dataset(dataset);
 
     free(h_w); free(h_b); free(h_stm); free(h_score);
     adam_free(optimizer); free(params);
     free_tensor(batch_w); free_tensor(batch_b); free_tensor(batch_stm); free_tensor(batch_score);
-    free(file_indices);
+    free(sample_indices);
     
     return model;
 }
@@ -336,7 +306,7 @@ int main(int argc, char* argv[]) {
         "data_handling/training_data_part_9.bin"
         //"data_handling/training_data_part_10.bin"
     };
-    */
+    
     const char* datasets[] = {
         "selfplay_data/training_data_thread_0.bin",
         "selfplay_data/training_data_thread_1.bin",
@@ -349,19 +319,24 @@ int main(int argc, char* argv[]) {
         "selfplay_data/training_data_thread_8.bin",
         //"selfplay_data/training_data_thread_9.bin",
     };
+    */
+
+    const char* datasets[] = {
+        "combined_unique_dataset.bin" 
+    };
 
     
     int num_datasets = sizeof(datasets) / sizeof(datasets[0]);
 
-    const char* validation_dataset = "selfplay_data/training_data_thread_9.bin";
+    const char* validation_dataset = "selfplay_data_v2/training_data_thread_9.bin";
 
     NNUE* existing_model = load_nnue("768_float_9_18_50_1024.nnue", DEVICE_GPU); // already trained model
 
     NNUE* trained_model = run_nnue_training(DEVICE_GPU, "GPU", datasets, validation_dataset /*validation dataset*/, num_datasets, lambda_val, lr_val, k_val, NULL);
     
     if (trained_model) {
-        save_nnue(trained_model, "768_float_50_1024_v1.nnue"); // v1 = trained on Mark_11 (hc positional eval)
-        save_nnue_quantized(trained_model, "768_quant_50_1024_v1.nnue");
+        save_nnue(trained_model, "768_float_50_1024_v2.nnue"); // v1 = trained on Mark_11 (hc positional eval), v2 = trained on mix of Mark_11 and nnue_v1
+        save_nnue_quantized(trained_model, "768_quant_50_1024_v2.nnue");
         free_nnue(trained_model);
     }
     
