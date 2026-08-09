@@ -30,17 +30,17 @@ uint64_t hash_features(uint16_t* features) {
 }
 
 int is_unique_and_insert(uint64_t hash) {
-    uint64_t idx = hash & (HASH_TABLE_SIZE - 1); // Fast modulo for power of 2
+    uint64_t idx = hash & (HASH_TABLE_SIZE - 1); 
     
     while (hash_table[idx] != 0) {
         if (hash_table[idx] == hash) {
-            return 0; // We have seen this position before! (Duplicate)
+            return 0; // seen before
         }
         idx = (idx + 1) & (HASH_TABLE_SIZE - 1);
     }
     
-    hash_table[idx] = hash; // Empty slot found, save it
-    return 1; // Unique!
+    hash_table[idx] = hash;
+    return 1; // unique
 }
 
 void process_file(const char* filepath, FILE* out_file, long long* total, long long* unique) {
@@ -66,7 +66,6 @@ void process_file(const char* filepath, FILE* out_file, long long* total, long l
 }
 
 int main() {
-    // 1. Allocate 2GB of RAM for the hash table and zero it out (calloc)
     printf("Allocating 2GB Hash Table...\n");
     hash_table = (uint64_t*)calloc(HASH_TABLE_SIZE, sizeof(uint64_t));
     if (!hash_table) {
