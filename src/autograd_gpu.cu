@@ -94,7 +94,7 @@ __global__ void backward_sigmoid_kernel(float* t_grad, float* a_grad, float* out
     if (i < size) {
         if (a_grad != NULL) {
             float s = out_data[i];
-            float grad = t_grad[i] * (s * (1.0f - s)) * (1.0f / 400.0f);
+            float grad = t_grad[i] * (s * (1.0f - s));
             atomicAdd(&a_grad[i], grad);
         }
     }
