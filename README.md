@@ -1,4 +1,4 @@
-# NNUE Trainer
+# Joist - NNUE Trainer
 
 ---
 
