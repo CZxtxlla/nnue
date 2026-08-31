@@ -2,9 +2,9 @@
 
 ---
 
-This project servers as a complementary to another of mine, the [Josiah](https://github.com/CZxtxlla/Josiah-Chess) chess engine. It provides a 768 feature nnue implementation as well as training loop and quantization written purely in Cuda C, based off another one of my projects [here](https://github.com/CZxtxlla/smallGrad). Two python scripts for data processing are also provided, labeling fens from pgn files using [stockfish](https://github.com/official-stockfish/stockfish). 
+This project serves as a complementary to another of mine, the Josiah chess engine. It provides a 768 feature nnue implementation as well as training loop and quantization written purely in Cuda C, based off another one of my projects [here](https://github.com/CZxtxlla/smallGrad).
 
-This is not really meant for other people to use and is probably inefficient but it was really more about personal learning and a cool project to work on. Below I am attaching some of my notes for implementing some of the things required, it doesn't cover everything but it was useful for outlining the math for the gradients.
+This is not really meant for other people to use and is probably (definitely) inefficient but it was really more about personal learning and a cool project to work on. Below I am attaching some of my notes for implementing some of the things required, it doesn't cover everything but it was useful for outlining the math for the gradients.
 
 ---
 
